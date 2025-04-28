@@ -11,13 +11,18 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { useGameStore } from "@/stores/game";
-import GuessInput  from "@/components/GuessInput.vue";
+import type { GameState } from "@/stores/game";      // ← Store の型をインポート
+import GuessInput from "@/components/GuessInput.vue";
 import ResultMessage from "@/components/ResultMessage.vue";
 import HistoryList from "@/components/HistoryList.vue";
 
-const store = useGameStore();
+// Pinia の useGameStore はすでにジェネリクスで型付け済みなので…
+const store = useGameStore(); // 型：GameState
+
+// （必要に応じて store をコンソールで型確認できます）
+// console.log(store.$state as GameState);
 </script>
 
 <style>
@@ -32,4 +37,3 @@ const store = useGameStore();
   font-size: 16px;
 }
 </style>
-
