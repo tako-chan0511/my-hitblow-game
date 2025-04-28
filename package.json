@@ -3,11 +3,14 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "homepage": "https://tako-chan0511.github.io/my-hitblow-game",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "type-check": "vue-tsc --noEmit",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist"
   },
   "dependencies": {
     "@pinia/testing": "^1.0.1",
@@ -21,6 +24,7 @@
     "@vitejs/plugin-vue": "^5.2.1",
     "@vitest/coverage-v8": "^3.1.2",
     "@vue/tsconfig": "^0.7.0",
+    "gh-pages": "^6.3.0",
     "typescript": "^5.8.3",
     "vite": "^6.2.1",
     "vite-plugin-vue-devtools": "^7.7.2",
