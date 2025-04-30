@@ -4,7 +4,7 @@
       v-model="value"
       maxlength="4"
       @keyup.enter="onSubmit"
-      placeholder="0123"
+      placeholder="****"
     />
     <button @click="onSubmit">判定</button>
   </div>

@@ -26,6 +26,19 @@ function generateSecret(): string {
     )[0];
   }).join('');
 }
+// 局所的に全候補リストを作る（4桁重複なし=10P4=5040通り）
+function allCandidates(): string[] {
+  const nums = Array.from({ length: 10 }, (_, i) => i.toString());
+  const result: string[] = [];
+  function build(prefix: string, arr: string[]) {
+    if (prefix.length === 4) return result.push(prefix);
+    for (let i = 0; i < arr.length; i++) {
+      build(prefix + arr[i], arr.filter((_, j) => j !== i));
+    }
+  }
+  build('', nums);
+  return result;
+}
 
 export const useGameStore = defineStore('game', {
   // state に GameState を返すことで型推論される
@@ -34,6 +47,21 @@ export const useGameStore = defineStore('game', {
     history: [],
     message: '',
   }),
+  getters: {
+    remainingCandidates(state): string[] {
+      return allCandidates().filter(candidate => {
+        return state.history.every(({ guess, hit, blow }) => {
+          // Hit/Blow を再計算して同じになるものだけ残す
+          let h = 0, b = 0;
+          for (let i = 0; i < 4; i++) {
+            if (candidate[i] === guess[i]) h++;
+            else if (guess.includes(candidate[i])) b++;
+          }
+          return h === hit && b === blow;
+        });
+      });
+    }
+  },
   actions: {
     /**
      * ゲームをリセットして状態を初期化
