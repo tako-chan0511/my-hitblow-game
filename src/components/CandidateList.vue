@@ -1,11 +1,11 @@
 <template>
   <div class="overlay">
     <div class="panel">
+      <button @click="$emit('close')">閉じる</button>
       <h2>残り候補 ({{ store.remainingCandidates.length }})</h2>
       <div class="list">
         <span v-for="num in store.remainingCandidates" :key="num">{{ num }}</span>
       </div>
-      <button @click="$emit('close')">閉じる</button>
     </div>
   </div>
 </template>
