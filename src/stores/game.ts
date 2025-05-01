@@ -26,6 +26,7 @@ function generateSecret(): string {
     )[0];
   }).join('');
 }
+
 // 局所的に全候補リストを作る（4桁重複なし=10P4=5040通り）
 function allCandidates(): string[] {
   const nums = Array.from({ length: 10 }, (_, i) => i.toString());
@@ -41,7 +42,6 @@ function allCandidates(): string[] {
 }
 
 export const useGameStore = defineStore('game', {
-  // state に GameState を返すことで型推論される
   state: (): GameState => ({
     secret: generateSecret(),
     history: [],
@@ -51,7 +51,6 @@ export const useGameStore = defineStore('game', {
     remainingCandidates(state): string[] {
       return allCandidates().filter(candidate => {
         return state.history.every(({ guess, hit, blow }) => {
-          // Hit/Blow を再計算して同じになるものだけ残す
           let h = 0, b = 0;
           for (let i = 0; i < 4; i++) {
             if (candidate[i] === guess[i]) h++;
@@ -63,21 +62,13 @@ export const useGameStore = defineStore('game', {
     }
   },
   actions: {
-    /**
-     * ゲームをリセットして状態を初期化
-     */
     reset(): void {
       this.secret = generateSecret();
       this.history = [];
       this.message = '';
     },
 
-    /**
-     * 推測をチェックして Hit/Blow を履歴に追加
-     * @param guess - ユーザーが入力した 4 桁の文字列
-     */
     checkGuess(guess: string): void {
-      // バリデーション
       if (!/^\d{4}$/.test(guess) || new Set(guess).size !== 4) {
         this.message = '4桁の異なる数字を入力してください。';
         return;
@@ -96,8 +87,20 @@ export const useGameStore = defineStore('game', {
       this.history.push({ guess, hit, blow });
       this.message =
         hit === 4
-          ? `正解！秘密の数字は ${this.secret} でした。`  
+          ? `正解！秘密の数字は ${this.secret} でした。`
           : `${hit} Hit, ${blow} Blow`;
+    },
+
+    /**
+     * 任意の履歴位置（index）からやり直す
+     * ／この行を含めずに履歴を切り戻す
+     * @param index - やり直したい履歴のインデックス
+     */
+    rollbackTo(index: number): void {
+      this.history = this.history.slice(0, index);
+      this.message = index > 0
+        ? `第${index}回目からやり直しました。`
+        : '最初からやり直しました。';
     },
   },
 });
