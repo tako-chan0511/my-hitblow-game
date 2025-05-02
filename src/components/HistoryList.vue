@@ -4,6 +4,10 @@
     <ul>
       <li v-for="(entry, i) in store.history" :key="i" class="entry">
         {{ i + 1 }}回目: {{ entry.guess }} - {{ entry.hit }} Hit, {{ entry.blow }} Blow
+        <!-- この行まで適用した時点の残り候補数 -->
+        <span class="remaining">
+          残り候補: {{ store.remainingCandidatesAt(i).length }}
+        </span>
         <button @click="confirmRollback(i)">↓ ここ以降を取り消す</button>
       </li>
     </ul>

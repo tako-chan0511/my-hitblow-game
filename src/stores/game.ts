@@ -48,6 +48,7 @@ export const useGameStore = defineStore('game', {
     message: '',
   }),
   getters: {
+    // これまでの実装そのまま
     remainingCandidates(state): string[] {
       return allCandidates().filter(candidate => {
         return state.history.every(({ guess, hit, blow }) => {
@@ -59,6 +60,28 @@ export const useGameStore = defineStore('game', {
           return h === hit && b === blow;
         });
       });
+    },
+
+    /**
+     * @param state
+     * @returns 指定の履歴 index までを適用した時点の候補一覧を返す関数
+     */
+    remainingCandidatesAt: (state): ((index: number) => string[]) => {
+      return (index: number) => {
+        // 全候補から、history[0]～history[index] までを順にフィルタ
+        return allCandidates().filter(candidate => {
+          return state.history
+            .slice(0, index + 1)
+            .every(({ guess, hit, blow }) => {
+              let h = 0, b = 0;
+              for (let i = 0; i < 4; i++) {
+                if (candidate[i] === guess[i]) h++;
+                else if (guess.includes(candidate[i])) b++;
+              }
+              return h === hit && b === blow;
+            });
+        });
+      };
     }
   },
   actions: {
