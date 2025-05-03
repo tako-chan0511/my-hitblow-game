@@ -17,6 +17,12 @@ export interface GameState {
   message: string;
   // 現在の桁数（1〜10）
   digitCount: number;
+
+  // 以下、パフォーマンス改善用に追加
+  // 絞り込み後の候補リスト
+  candidates: string[];
+  // 各履歴インデックスごとの候補リストスナップショット
+  candidatesHistory: string[][];
 }
 
 /**
@@ -30,65 +36,57 @@ function generateSecret(digitCount: number): string {
   }).join('');
 }
 
-/**
- * 指定された桁数の全候補を生成 (Permutation)
- */
-function allCandidates(digitCount: number): string[] {
-  const nums = Array.from({ length: 10 }, (_, i) => i.toString());
+// -------------------------------------------------
+// ビットマスク＋キャッシュ方式の全候補生成
+// -------------------------------------------------
+const candidateCache: Record<number, string[]> = {};
+function allCandidatesFast(digitCount: number): string[] {
+  if (candidateCache[digitCount]) {
+    return candidateCache[digitCount];
+  }
   const result: string[] = [];
-  function build(prefix: string, arr: string[]) {
+  function dfs(prefix: string, usedMask: number): void {
     if (prefix.length === digitCount) {
       result.push(prefix);
-    } else {
-      for (let i = 0; i < arr.length; i++) {
-        build(prefix + arr[i], arr.filter((_, j) => j !== i));
+      return;
+    }
+    for (let d = 0; d < 10; d++) {
+      if (!(usedMask & (1 << d))) {
+        dfs(prefix + d.toString(), usedMask | (1 << d));
       }
     }
   }
-  build('', nums);
+  dfs('', 0);
+  candidateCache[digitCount] = result;
   return result;
 }
 
 export const useGameStore = defineStore('game', {
-  state: (): GameState => ({
-    secret: generateSecret(4),   // 初期桁数は4
-    history: [],
-    message: '',
-    digitCount: 4,
-  }),
+  state: (): GameState => {
+    const initialDigit = 4; // 10桁指定
+    const initialCands = allCandidatesFast(initialDigit);
+    return {
+      digitCount: initialDigit,
+      secret: generateSecret(initialDigit),
+      history: [],
+      message: '',
+      candidates: initialCands,
+      candidatesHistory: [initialCands],
+    };
+  },
 
   getters: {
-    /**
-     * 現在の履歴に基づいた候補一覧を取得
-     */
+    // 絞り込み済み候補をそのまま返す
     remainingCandidates(state): string[] {
-      return allCandidates(state.digitCount).filter(candidate =>
-        state.history.every(({ guess, hit, blow }) => {
-          let h = 0, b = 0;
-          for (let i = 0; i < state.digitCount; i++) {
-            if (candidate[i] === guess[i]) h++;
-            else if (guess.includes(candidate[i])) b++;
-          }
-          return h === hit && b === blow;
-        })
-      );
+      return state.candidates;
     },
 
-    /**
-     * 指定インデックスまでの履歴での候補を取得する関数
-     */
+    // 任意の履歴インデックス後の候補リストを返す
     remainingCandidatesAt: (state): ((index: number) => string[]) => {
-      return (index: number) =>
-        allCandidates(state.digitCount).filter(candidate =>
-          state.history.slice(0, index + 1).every(({ guess, hit, blow }) => {
-            let h = 0, b = 0;
-            for (let i = 0; i < state.digitCount; i++) {
-              if (candidate[i] === guess[i]) h++;
-              else if (guess.includes(candidate[i])) b++;
-            }
-            return h === hit && b === blow;
-          })
-        );
+      return (index: number) => {
+        // index=0 の場合は最初のチェック後なのでスナップショットは candidatesHistory[1]
+        return state.candidatesHistory[index + 1] || [];
+      };
     },
   },
 
@@ -108,10 +106,14 @@ export const useGameStore = defineStore('game', {
       this.secret = generateSecret(this.digitCount);
       this.history = [];
       this.message = '';
+      // 候補リストも再生成＆履歴クリア
+      const cands = allCandidatesFast(this.digitCount);
+      this.candidates = cands;
+      this.candidatesHistory = [cands];
     },
 
     /**
-     * ユーザの推測を判定
+     * ユーザの推測を判定し、候補をインクリメンタルに絞り込む
      */
     checkGuess(guess: string): void {
       // バリデーション: 桁数・重複チェック
@@ -121,6 +123,7 @@ export const useGameStore = defineStore('game', {
         return;
       }
 
+      // Hit/Blow 計算
       let hit = 0;
       let blow = 0;
       for (let i = 0; i < this.digitCount; i++) {
@@ -128,8 +131,22 @@ export const useGameStore = defineStore('game', {
         else if (this.secret.includes(guess[i])) blow++;
       }
 
+      // 履歴に追加
       this.history.push({ guess, hit, blow });
-      // 1桁モードの場合の専用メッセージ
+
+      // インクリメンタル絞り込み
+      this.candidates = this.candidates.filter(candidate => {
+        let h = 0, b = 0;
+        for (let i = 0; i < this.digitCount; i++) {
+          if (candidate[i] === guess[i]) h++;
+          else if (guess.includes(candidate[i])) b++;
+        }
+        return h === hit && b === blow;
+      });
+      // スナップショット保存
+      this.candidatesHistory.push(this.candidates);
+
+      // メッセージ更新
       if (this.digitCount === 1) {
         this.message =
           hit === 1
@@ -147,7 +164,11 @@ export const useGameStore = defineStore('game', {
      * 指定履歴インデックスまでロールバック
      */
     rollbackTo(index: number): void {
+      // 履歴と候補を巻き戻す
       this.history = this.history.slice(0, index);
+      this.candidates = this.candidatesHistory[index];
+      this.candidatesHistory = this.candidatesHistory.slice(0, index + 1);
+
       this.message =
         index > 0
           ? `第${index}回目からやり直しました。`
