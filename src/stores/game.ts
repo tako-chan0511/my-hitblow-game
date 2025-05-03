@@ -171,7 +171,7 @@ export const useGameStore = defineStore('game', {
 
       this.message =
         index > 0
-          ? `第${index}回目からやり直しました。`
+          ? `第${index+1}回目からやり直します。`
           : '最初からやり直しました。';
     },
   },
