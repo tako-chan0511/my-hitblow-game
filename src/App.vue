@@ -1,7 +1,15 @@
 <template>
   <div class="container">
-    <h1>Hit & Blow (4桁)</h1>
-    <p>4桁の数字を当ててください（各桁異なる）</p>
+    <h1>Hit & Blow ({{ store.digitCount }}桁)</h1>
+    <p>{{ store.digitCount }}桁の数字を当ててください（各桁異なる）</p>
+
+    <!-- 桁数選択 -->
+    <div class="digit-select">
+      <label for="digitCount">桁数:</label>
+      <select id="digitCount" v-model.number="digitCount" @change="onDigitCountChange">
+        <option v-for="n in 10" :key="n" :value="n">{{ n }}桁</option>
+      </select>
+    </div>
 
     <GuessInput />
     <ResultMessage />
@@ -32,6 +40,12 @@ import HistoryList from '@/components/HistoryList.vue';
 const store = useGameStore() as GameStore;
 // モーダル表示制御
 const show = ref(false);
+// 桁数選択用のローカル ref
+const digitCount = ref(store.digitCount);
+
+function onDigitCountChange() {
+  store.setDigitCount(digitCount.value);
+}
 </script>
 
 <style scoped>
@@ -39,6 +53,17 @@ const show = ref(false);
   text-align: center;
   font-family: Arial, sans-serif;
   padding: 20px;
+}
+.digit-select {
+  margin-bottom: 16px;
+}
+.digit-select label {
+  margin-right: 8px;
+  font-weight: bold;
+}
+.digit-select select {
+  padding: 4px 8px;
+  font-size: 16px;
 }
 .show-cands {
   margin: 10px 8px;
