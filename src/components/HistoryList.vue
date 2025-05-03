@@ -23,7 +23,7 @@ const store = useGameStore() as GameState & {
 };
 
 function confirmRollback(index: number) {
-  const label = index > 0 ? `第${index+1}回目からやり直しますか？` : '最初からやり直しますか？';
+  const label = index > 0 ? `${index+1}回目からやり直しますか？` : '最初からやり直しますか？';
   if (confirm(`${label}\n以降の履歴は削除されます。`)) {
     store.rollbackTo(index);
   }
