@@ -1,0 +1,17 @@
+/* src/assets/main.css */
+:root {
+    --bg-color: #ffffff;
+    --text-color: #333333;
+    --primary-color: #4f46e5;
+  }
+  [data-theme="dark"] {
+    --bg-color: #1f2937;
+    --text-color: #f9fafb;
+    --primary-color: #818cf8;
+  }
+  
+  body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+  }
+  
