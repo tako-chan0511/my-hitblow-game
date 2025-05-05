@@ -197,8 +197,14 @@ async function submitGuess(): Promise<void> {
   gap: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
+/* ↓ここを変更しました↓ */
 .picker-btn {
-  padding: 12px 0;
+  /* 横長にするため最小幅を指定 */
+  min-width: 60px;
+  /* タッチしやすいよう高さも確保 */
+  height: 48px;
+  /* 上下のパディングで縦中央揃え */
+  padding: 0;
   font-size: 18px;
   background-color: var(--primary-color);
   color: var(--bg-color);
@@ -206,6 +212,7 @@ async function submitGuess(): Promise<void> {
   border-radius: 4px;
   cursor: pointer;
 }
+/* スマホでもタッチしやすいサイズ（48px以上）を確保済み */
 .picker-btn:disabled {
   background-color: #aaa;
   cursor: not-allowed;
