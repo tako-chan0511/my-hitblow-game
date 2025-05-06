@@ -26,6 +26,7 @@
     <!-- 数字ピッカーのポップアップ -->
     <div v-if="pickerVisible" class="picker-overlay" @click.self="closePicker">
       <div class="picker-panel">
+        <!-- 数字選択ボタン -->
         <button
           v-for="n in numbers"
           :key="n"
@@ -34,6 +35,13 @@
           :disabled="isSelected(n)"
         >
           {{ n }}
+        </button>
+        <!-- 削除ボタン -->
+        <button
+          class="picker-btn delete-btn"
+          @click="clearDigit"
+        >
+          削除
         </button>
       </div>
     </div>
@@ -74,6 +82,13 @@ function isSelected(n: number): boolean {
 function selectDigit(n: number) {
   if (currentIdx.value === null) return;
   digits.value[currentIdx.value] = String(n);
+  closePicker();
+}
+
+// 選択スロットのクリア
+function clearDigit() {
+  if (currentIdx.value === null) return;
+  digits.value[currentIdx.value] = '';
   closePicker();
 }
 
@@ -193,18 +208,12 @@ async function submitGuess(): Promise<void> {
   padding: 20px;
   border-radius: 8px;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
-/* ↓ここを変更しました↓ */
 .picker-btn {
-  /* 横長にするため最小幅を指定 */
-  min-width: 60px;
-  /* タッチしやすいよう高さも確保 */
-  height: 48px;
-  /* 上下のパディングで縦中央揃え */
-  padding: 0;
+  padding: 12px 0;
   font-size: 18px;
   background-color: var(--primary-color);
   color: var(--bg-color);
@@ -212,9 +221,15 @@ async function submitGuess(): Promise<void> {
   border-radius: 4px;
   cursor: pointer;
 }
-/* スマホでもタッチしやすいサイズ（48px以上）を確保済み */
 .picker-btn:disabled {
   background-color: #aaa;
   cursor: not-allowed;
+}
+/* 削除ボタン専用スタイル */
+.delete-btn {
+  background-color: #e53e3e; /* 赤系 */
+}
+.delete-btn:hover {
+  opacity: 0.8;
 }
 </style>
