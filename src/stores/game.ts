@@ -1,3 +1,4 @@
+import { addResult } from '@/lib/db';   // ← これを先頭付近に追加
 import { defineStore } from 'pinia';
 
 // 履歴エントリの型定義
@@ -23,6 +24,8 @@ export interface GameState {
   candidates: string[];
   // 各履歴インデックスごとの候補リストスナップショット
   candidatesHistory: string[][];
+  // ゲーム開始時刻（ミリ秒）
+  startTime: number;
 }
 
 /**
@@ -64,12 +67,14 @@ function allCandidatesFast(digitCount: number): string[] {
 export const useGameStore = defineStore('game', {
   state: (): GameState => {
     const initialDigit = 4; // 10桁指定
+    const now = Date.now();
     const initialCands = allCandidatesFast(initialDigit);
     return {
       digitCount: initialDigit,
       secret: generateSecret(initialDigit),
       history: [],
       message: '',
+      startTime: now,
       candidates: initialCands,
       candidatesHistory: [initialCands],
     };
@@ -106,6 +111,7 @@ export const useGameStore = defineStore('game', {
       this.secret = generateSecret(this.digitCount);
       this.history = [];
       this.message = '';
+      this.startTime = Date.now();
       // 候補リストも再生成＆履歴クリア
       const cands = allCandidatesFast(this.digitCount);
       this.candidates = cands;
@@ -115,7 +121,7 @@ export const useGameStore = defineStore('game', {
     /**
      * ユーザの推測を判定し、候補をインクリメンタルに絞り込む
      */
-    checkGuess(guess: string): void {
+    async checkGuess(guess: string): Promise<void> {
       // バリデーション: 桁数・重複チェック
       const pattern = new RegExp(`^\\d{${this.digitCount}}$`);
       if (!pattern.test(guess) || new Set(guess).size !== this.digitCount) {
@@ -157,6 +163,17 @@ export const useGameStore = defineStore('game', {
           hit === this.digitCount
             ? `正解！秘密の数字は ${this.secret} でした。`
             : `${hit} Hit, ${blow} Blow`;
+      }
+      // 正解時だけ履歴を保存
+      if (hit === this.digitCount) {
+        const attempts = this.history.length;
+        const elapsedMs = Date.now() - this.startTime;
+        // 経過ミリ秒ではなく、"日本時間の現在時刻" を取得して played_at に保存したい場合：
+        const playedAtJp = new Date().toLocaleString('ja-JP', {
+          timeZone: 'Asia/Tokyo',
+          hour12: false,       // 24時間制にしたい場合
+        });
+        await addResult(this.digitCount, attempts, elapsedMs, playedAtJp);
       }
     },
 
