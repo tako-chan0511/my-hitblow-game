@@ -12,10 +12,30 @@
       </div>
     </div>
 
-    <!-- 判定ボタン -->
-    <button class="submit-btn" :disabled="!isValid || loading" @click="submitGuess">
-      判定
-    </button>
+    <!-- 判定ボタンと貼付入力 -->
+    <div class="action-buttons">
+      <div class="paste-input">
+        <input
+          v-model.trim="pasteValue"
+          :placeholder="`${store.digitCount}桁の数字を貼り付け`"
+          :maxlength="store.digitCount"
+        />
+        <button
+          class="paste-btn"
+          :disabled="loading"
+          @click="pasteInput"
+        >
+          貼付
+        </button>
+      </div>
+      <button
+        class="submit-btn"
+        :disabled="!isValid || loading"
+        @click="submitGuess"
+      >
+        判定
+      </button>
+    </div>
 
     <!-- ローディング中の表示 -->
     <div v-if="loading" class="check-loading">
@@ -24,9 +44,12 @@
     </div>
 
     <!-- 数字ピッカーのポップアップ -->
-    <div v-if="pickerVisible" class="picker-overlay" @click.self="closePicker">
+    <div
+      v-if="pickerVisible"
+      class="picker-overlay"
+      @click.self="closePicker"
+    >
       <div class="picker-panel">
-        <!-- 数字選択ボタン -->
         <button
           v-for="n in numbers"
           :key="n"
@@ -36,11 +59,7 @@
         >
           {{ n }}
         </button>
-        <!-- 削除ボタン -->
-        <button
-          class="picker-btn delete-btn"
-          @click="clearDigit"
-        >
+        <button class="picker-btn delete-btn" @click="clearDigit">
           削除
         </button>
       </div>
@@ -54,59 +73,18 @@ import { useGameStore } from '@/stores/game';
 
 const store = useGameStore();
 
-// 数字ピッカーに使用する数字リスト（0～9）
+// 候補数字リスト (0-9)
 const numbers = Array.from({ length: 10 }, (_, i) => i);
 
 // スロット入力値
 const digits = ref<string[]>(Array.from({ length: store.digitCount }, () => ''));
-// 現在開いているピッカーのスロットインデックス
-const currentIdx = ref<number | null>(null);
+// 貼付用文字列
+const pasteValue = ref<string>('');
 // ピッカー表示制御
 const pickerVisible = ref(false);
+const currentIdx = ref<number | null>(null);
 
-function openPicker(idx: number) {
-  currentIdx.value = idx;
-  pickerVisible.value = true;
-}
-function closePicker() {
-  pickerVisible.value = false;
-  currentIdx.value = null;
-}
-
-// 重複選択防止
-function isSelected(n: number): boolean {
-  return digits.value.some(d => d === String(n));
-}
-
-// ピッカーから数字選択
-function selectDigit(n: number) {
-  if (currentIdx.value === null) return;
-  digits.value[currentIdx.value] = String(n);
-  closePicker();
-}
-
-// 選択スロットのクリア
-function clearDigit() {
-  if (currentIdx.value === null) return;
-  digits.value[currentIdx.value] = '';
-  closePicker();
-}
-
-// バリデーション
-const isValid = computed(() => {
-  if (digits.value.some(d => d === '')) return false;
-  return new Set(digits.value).size === store.digitCount;
-});
-
-// 桁数変更時にスロットリセット
-watch(
-  () => store.digitCount,
-  (newCount) => {
-    digits.value = Array.from({ length: newCount }, () => '');
-  }
-);
-
-// ローディングとタイマー制御
+// ローディング／タイマー
 const loading = ref(false);
 const showTimer = ref(false);
 const elapsedMs = ref(0);
@@ -119,24 +97,74 @@ const formattedTime = computed(() => {
   return `${s}.${String(ms).padStart(3, '0')} 秒`;
 });
 
+// スロット編集
+function openPicker(idx: number) {
+  currentIdx.value = idx;
+  pickerVisible.value = true;
+}
+function closePicker() {
+  pickerVisible.value = false;
+  currentIdx.value = null;
+}
+function selectDigit(n: number) {
+  if (currentIdx.value == null) return;
+  digits.value[currentIdx.value] = String(n);
+  closePicker();
+}
+function clearDigit() {
+  if (currentIdx.value == null) return;
+  digits.value[currentIdx.value] = '';
+  closePicker();
+}
+function isSelected(n: number): boolean {
+  return digits.value.includes(String(n));
+}
+
+// 貼付処理
+function pasteInput() {
+  const str = pasteValue.value;
+  if (str.length !== store.digitCount) {
+    alert(`${store.digitCount}桁の文字列を貼り付けてください`);
+    return;
+  }
+  if (!/^\d+$/.test(str) || new Set(str).size !== store.digitCount) {
+    alert('重複なく数字のみを貼り付けてください');
+    return;
+  }
+  digits.value = str.split('');
+}
+
+// バリデーション
+const isValid = computed(() => {
+  return (
+    digits.value.every(d => d !== '') &&
+    new Set(digits.value).size === store.digitCount
+  );
+});
+
+// 桁数変更時リセット
+watch(
+  () => store.digitCount,
+  newCount => {
+    digits.value = Array.from({ length: newCount }, () => '');
+    pasteValue.value = '';
+  }
+);
+
 // 判定実行
 async function submitGuess(): Promise<void> {
   if (!isValid.value || loading.value) return;
   loading.value = true;
   const start = Date.now();
-  triggerTimeout = window.setTimeout(() => {
-    showTimer.value = true;
-  }, 3000);
+  triggerTimeout = window.setTimeout(() => (showTimer.value = true), 3000);
   timerInterval = window.setInterval(() => {
     elapsedMs.value = Date.now() - start;
   }, 100);
 
-  // 次のVue更新サイクルへ
   await new Promise(r => setTimeout(r, 0));
-
   store.checkGuess(digits.value.join(''));
-  // 提出後リセット
   digits.value = Array.from({ length: store.digitCount }, () => '');
+  pasteValue.value = '';
 
   clearTimeout(triggerTimeout);
   clearInterval(timerInterval);
@@ -148,7 +176,6 @@ async function submitGuess(): Promise<void> {
 
 <style scoped>
 .guess-input {
-  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -156,7 +183,7 @@ async function submitGuess(): Promise<void> {
 .slots {
   display: flex;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 .slot {
   width: 40px;
@@ -170,18 +197,43 @@ async function submitGuess(): Promise<void> {
   color: var(--text-color);
   cursor: pointer;
 }
-.submit-btn {
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+.paste-input {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.paste-input input {
+  width: calc(1ch * var(--digitCount) + 8px);
+  padding: 4px;
+  font-size: 16px;
+  text-align: center;
+}
+.submit-btn,
+.paste-btn {
   padding: 6px 12px;
   font-size: 16px;
-  background-color: var(--primary-color);
-  color: var(--bg-color);
   border: none;
   border-radius: 4px;
   cursor: pointer;
 }
-.submit-btn:disabled {
+.submit-btn {
+  background-color: var(--primary-color);
+  color: var(--bg-color);
+}
+.submit-btn:disabled,
+.paste-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+.paste-btn {
+  background-color: #10b981;
+  color: #fff;
 }
 .check-loading {
   margin-top: 8px;
@@ -190,7 +242,6 @@ async function submitGuess(): Promise<void> {
 .check-loading p {
   margin: 4px 0;
 }
-/* ピッカーオーバーレイ */
 .picker-overlay {
   position: fixed;
   top: 0;
@@ -213,7 +264,7 @@ async function submitGuess(): Promise<void> {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 .picker-btn {
-  padding: 12px 0;
+  padding: 8px 0;
   font-size: 18px;
   background-color: var(--primary-color);
   color: var(--bg-color);
@@ -225,9 +276,8 @@ async function submitGuess(): Promise<void> {
   background-color: #aaa;
   cursor: not-allowed;
 }
-/* 削除ボタン専用スタイル */
 .delete-btn {
-  background-color: #e53e3e; /* 赤系 */
+  background-color: #e53e3e;
 }
 .delete-btn:hover {
   opacity: 0.8;
