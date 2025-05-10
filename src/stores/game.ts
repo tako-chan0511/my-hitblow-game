@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia';
+import { postCompletedHistory } from '@/api';
 
 // 履歴エントリの型定義
 export interface HistoryEntry {
@@ -63,7 +64,7 @@ function allCandidatesFast(digitCount: number): string[] {
 
 export const useGameStore = defineStore('game', {
   state: (): GameState => {
-    const initialDigit = 4; // 10桁指定
+    const initialDigit = 4; // 10桁指定可能
     const initialCands = allCandidatesFast(initialDigit);
     return {
       digitCount: initialDigit,
@@ -115,7 +116,7 @@ export const useGameStore = defineStore('game', {
     /**
      * ユーザの推測を判定し、候補をインクリメンタルに絞り込む
      */
-    checkGuess(guess: string): void {
+    async checkGuess(guess: string): Promise<void> {
       // バリデーション: 桁数・重複チェック
       const pattern = new RegExp(`^\\d{${this.digitCount}}$`);
       if (!pattern.test(guess) || new Set(guess).size !== this.digitCount) {
@@ -134,6 +135,16 @@ export const useGameStore = defineStore('game', {
       // 履歴に追加
       this.history.push({ guess, hit, blow });
 
+      // 正解なら DB に完了履歴を保存
+      if (hit === this.digitCount) {
+        try {
+          await postCompletedHistory(this.digitCount, this.history.length);
+          console.log('完了履歴を登録しました');
+        } catch (e) {
+          console.error('完了履歴登録に失敗しました', e);
+        }
+      }
+
       // インクリメンタル絞り込み
       this.candidates = this.candidates.filter(candidate => {
         let h = 0, b = 0;
@@ -147,16 +158,10 @@ export const useGameStore = defineStore('game', {
       this.candidatesHistory.push(this.candidates);
 
       // メッセージ更新
-      if (this.digitCount === 1) {
-        this.message =
-          hit === 1
-            ? `正解！秘密の数字は ${this.secret} でした。`
-            : '不正解です。';
+      if (hit === this.digitCount) {
+        this.message = `おめでとう！${this.history.length} 回で正解！`;  
       } else {
-        this.message =
-          hit === this.digitCount
-            ? `正解！秘密の数字は ${this.secret} でした。`
-            : `${hit} Hit, ${blow} Blow`;
+        this.message = `${hit} Hit, ${blow} Blow`;
       }
     },
 

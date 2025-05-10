@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          Int               @id @default(autoincrement())
+  email       String            @unique
+  password    String
+  histories   History[]
+  completedGames CompletedGame[]  @relation("UserCompletedGames")
+}
+
+model History {
+  id        Int      @id @default(autoincrement())
+  guess     String
+  hit       Int
+  blow      Int
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+}
+
+/// 完了ゲーム履歴を保持するモデル
+model CompletedGame {
+  id          Int      @id @default(autoincrement())
+  user        User     @relation("UserCompletedGames", fields: [userId], references: [id])
+  userId      Int
+  digitCount  Int
+  attempts    Int
+  finishedAt  DateTime @default(now())
+
+  @@index([userId])
+}

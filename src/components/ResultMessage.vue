@@ -11,5 +11,10 @@ const store = useGameStore() as GameStore;
 </script>
 
 <style scoped>
-/* コンポーネント固有のスタイルをここに追加 */
+/* 追加: メッセージを中央寄せ */
+p {
+  text-align: center;
+  margin: 16px 0;
+  font-weight: bold;
+}
 </style>
