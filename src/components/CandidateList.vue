@@ -4,7 +4,7 @@
       <button class="close-btn" @click="$emit('close')">閉じる</button>
 
       <template v-if="!loading">
-        <!-- フィルタスロット -->
+        <!-- フィルタースロット -->
         <div class="filter-slots">
           <div
             v-for="(slot, idx) in filterSlots"
@@ -20,16 +20,20 @@
 
             <!-- クリックされたスロットだけに候補を表示 -->
             <div v-if="pickerIdx === idx" class="filter-picker-panel">
+              <!-- 数字候補ボタン：一度選んだ数字は disabled -->
               <button
-                v-for="num in possibleDigitsBySlot[idx]"
+                v-for="num in numbers"
                 :key="num"
                 class="filter-picker-btn"
+                :disabled="filterSlots.includes(num)"
                 @click="selectFilter(num, idx)"
               >
                 {{ num }}
               </button>
+              <!-- 削除ボタン：スロットが空のとき disabled -->
               <button
                 class="filter-picker-clear"
+                :disabled="filterSlots[idx] === ''"
                 @click="selectFilter('', idx)"
               >
                 削除
@@ -67,6 +71,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+// 全数字リスト(0〜9)を常に表示し、無効ボタンはdisabledで制御
+const numbers = Array.from({ length: 10 }, (_, i) => i.toString());
 import { useGameStore } from '@/stores/game';
 
 // ストア
@@ -112,26 +118,25 @@ async function generateCandidates() {
     filterSlots.value = Array(candidates.value[0].length).fill('');
   }
 
-  window.clearTimeout(triggerTimeout);
-  window.clearInterval(timerInterval);
+  clearTimeout(triggerTimeout);
+  clearInterval(timerInterval);
   loading.value = false;
 }
 
 onMounted(generateCandidates);
 onBeforeUnmount(() => {
-  window.clearTimeout(triggerTimeout);
-  window.clearInterval(timerInterval);
+  clearTimeout(triggerTimeout);
+  clearInterval(timerInterval);
 });
 
 // 絞り込み後の全件
-const displayed = computed(() => {
-  if (filterSlots.value.every((d) => d === '')) {
-    return candidates.value;
-  }
-  return candidates.value.filter((num) =>
-    filterSlots.value.every((d, i) => d === '' || num[i] === d)
-  );
-});
+const displayed = computed(() =>
+  filterSlots.value.every((d) => d === '')
+    ? candidates.value
+    : candidates.value.filter((num) =>
+        filterSlots.value.every((d, i) => d === '' || num[i] === d)
+      )
+);
 
 // 件数・1000件制限
 const displayedCount = computed(() => displayed.value.length);
@@ -140,8 +145,7 @@ const displayedLimited = computed(() => displayed.value.slice(0, 1000));
 // 各スロットにあり得る数字一覧（重複排除・ソート）
 const possibleDigitsBySlot = computed(() => {
   if (!displayed.value.length) return [];
-  const len = displayed.value[0].length;
-  return Array.from({ length: len }, (_, idx) => {
+  return Array.from({ length: displayed.value[0].length }, (_, idx) => {
     const set = new Set(displayed.value.map((num) => num[idx]));
     return Array.from(set).sort();
   });
@@ -173,9 +177,9 @@ function selectFilter(digit: string, idx: number) {
   cursor: pointer; color: var(--text-color);
   margin-bottom: 12px;
 }
-/* フィルタスロット */
 .filter-slots {
-  display: flex; gap: 8px; margin-bottom: 12px; justify-content: center;
+  display: flex; gap: 8px; margin-bottom: 12px;
+  justify-content: center;
 }
 .slot-wrapper {
   position: relative;
@@ -186,7 +190,6 @@ function selectFilter(digit: string, idx: number) {
   background: var(--bg-color); color: var(--text-color);
   cursor: pointer;
 }
-/* ポップアップパネル */
 .filter-picker-panel {
   position: absolute;
   top: calc(100% + 4px);
@@ -194,33 +197,26 @@ function selectFilter(digit: string, idx: number) {
   background: var(--bg-color);
   padding: 8px; border-radius: 6px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-
-  display: grid;
-  /* 6列それぞれをスロット幅に固定 */
-  grid-template-columns: repeat(6, 40px);
-  gap: 6px;
-  justify-content: center;
-  z-index: 1001;
+  display: grid; grid-template-columns: repeat(6, auto);
+  gap: 6px; justify-content: center; z-index: 1001;
 }
-/* 数字選択ボタン */
 .filter-picker-btn {
-  width: 40px;
-  height: 40px;
-  font-size: 20px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  width: 40px; height: 40px; font-size: 20px;
+  border: 1px solid #ccc; border-radius: 4px;
   background: var(--primary-color);
-  color: var(--bg-color);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
+  color: var(--bg-color); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
 }
-/* 削除ボタン */
+.filter-picker-btn:disabled {
+  background-color: #ddd;
+  color: #888;
+  cursor: not-allowed;
+}
 .filter-picker-clear {
-  width: 40px;
+  /* 固定幅を解除しテキストに合わせる */
+  min-width: 40px;
   height: 40px;
+  padding: 0 8px;
   font-size: 18px;
   border: 1px solid #ccc;
   border-radius: 4px;
@@ -230,8 +226,12 @@ function selectFilter(digit: string, idx: number) {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 4px;
   white-space: nowrap;
+}
+.filter-picker-clear:disabled {
+  background-color: #ddd;
+  color: #888;
+  cursor: not-allowed;
 }
 .limit-notice {
   font-size: 0.9em; color: #888; text-align: center; margin: 4px 0;
@@ -247,13 +247,7 @@ function selectFilter(digit: string, idx: number) {
 .loading p {
   margin: 8px 0; font-size: 16px; color: var(--text-color);
 }
-button {
-  margin-top: 12px; padding: 6px 12px;
-  background-color: var(--primary-color);
-  color: var(--bg-color); border: none; border-radius: 4px;
-  cursor: pointer;
-}
-button:hover {
+button:hover:not(:disabled) {
   opacity: 0.8;
 }
 </style>

@@ -59,7 +59,12 @@
         >
           {{ n }}
         </button>
-        <button class="picker-btn delete-btn" @click="clearDigit">
+        <!-- 削除ボタンは、スロットが空のとき無効化 -->
+        <button
+          class="picker-btn delete-btn"
+          @click="clearDigit"
+          :disabled="currentIdx === null || digits[currentIdx] === ''"
+        >
           削除
         </button>
       </div>
