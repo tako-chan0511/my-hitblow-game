@@ -1,5 +1,9 @@
-import { addResult } from '@/lib/db';   // ← これを先頭付近に追加
+// src/stores/game.ts
+import { addResult } from '@/lib/db';
 import { defineStore } from 'pinia';
+import { allCandidatesFast, filterByHistory } from '@/lib/candidate';
+// Web Worker をバンドルする場合の Vite 用クエリ
+import CandidateWorker from '@/workers/candidate.worker.ts?worker';
 
 // 履歴エントリの型定義
 export interface HistoryEntry {
@@ -10,186 +14,123 @@ export interface HistoryEntry {
 
 // ストアの状態型定義
 export interface GameState {
-  // 秘密の数字
-  secret: string;
-  // 過去の推測履歴
-  history: HistoryEntry[];
-  // 結果メッセージ
-  message: string;
-  // 現在の桁数（1〜10）
   digitCount: number;
-
-  // 以下、パフォーマンス改善用に追加
-  // 絞り込み後の候補リスト
-  candidates: string[];
-  // 各履歴インデックスごとの候補リストスナップショット
-  candidatesHistory: string[][];
-  // ゲーム開始時刻（ミリ秒）
+  secret: string;
+  history: HistoryEntry[];
+  message: string;
   startTime: number;
+  candidates: string[];
+  candidatesHistory: string[][];
 }
 
-/**
- * 指定された桁数の重複なしランダム文字列を生成
- */
+// 重複なしランダム文字列を生成
 function generateSecret(digitCount: number): string {
-  const numbers = Array.from({ length: 10 }, (_, i) => i.toString());
+  const nums = Array.from({ length: 10 }, (_, i) => i.toString());
   return Array.from({ length: digitCount }, () => {
-    const idx = Math.floor(Math.random() * numbers.length);
-    return numbers.splice(idx, 1)[0];
+    const idx = Math.floor(Math.random() * nums.length);
+    return nums.splice(idx, 1)[0];
   }).join('');
-}
-
-// -------------------------------------------------
-// ビットマスク＋キャッシュ方式の全候補生成
-// -------------------------------------------------
-const candidateCache: Record<number, string[]> = {};
-function allCandidatesFast(digitCount: number): string[] {
-  if (candidateCache[digitCount]) {
-    return candidateCache[digitCount];
-  }
-  const result: string[] = [];
-  function dfs(prefix: string, usedMask: number): void {
-    if (prefix.length === digitCount) {
-      result.push(prefix);
-      return;
-    }
-    for (let d = 0; d < 10; d++) {
-      if (!(usedMask & (1 << d))) {
-        dfs(prefix + d.toString(), usedMask | (1 << d));
-      }
-    }
-  }
-  dfs('', 0);
-  candidateCache[digitCount] = result;
-  return result;
 }
 
 export const useGameStore = defineStore('game', {
   state: (): GameState => {
-    const initialDigit = 4; // 10桁指定
-    const now = Date.now();
-    const initialCands = allCandidatesFast(initialDigit);
+    const initialDigit = 4;  // デフォルト4桁
+    const cands = allCandidatesFast(initialDigit);
     return {
       digitCount: initialDigit,
       secret: generateSecret(initialDigit),
       history: [],
       message: '',
-      startTime: now,
-      candidates: initialCands,
-      candidatesHistory: [initialCands],
+      startTime: Date.now(),
+      candidates: cands,
+      candidatesHistory: [cands],
     };
   },
 
   getters: {
-    // 絞り込み済み候補をそのまま返す
-    remainingCandidates(state): string[] {
-      return state.candidates;
-    },
-
-    // 任意の履歴インデックス後の候補リストを返す
-    remainingCandidatesAt: (state): ((index: number) => string[]) => {
-      return (index: number) => {
-        // index=0 の場合は最初のチェック後なのでスナップショットは candidatesHistory[1]
-        return state.candidatesHistory[index + 1] || [];
-      };
-    },
+    remainingCandidates: (s) => s.candidates,
+    remainingCandidatesAt: (s) => (idx: number) => s.candidatesHistory[idx + 1] || [],
   },
 
   actions: {
-    /**
-     * 桁数を設定し、ゲームをリセット
-     */
-    setDigitCount(count: number): void {
+    setDigitCount(count: number) {
       this.digitCount = Math.max(1, Math.min(10, count));
       this.reset();
     },
 
-    /**
-     * ゲームをリセット
-     */
-    reset(): void {
+    reset() {
       this.secret = generateSecret(this.digitCount);
       this.history = [];
       this.message = '';
       this.startTime = Date.now();
-      // 候補リストも再生成＆履歴クリア
-      const cands = allCandidatesFast(this.digitCount);
-      this.candidates = cands;
-      this.candidatesHistory = [cands];
+      const all = allCandidatesFast(this.digitCount);
+      this.candidates = all;
+      this.candidatesHistory = [all];
     },
 
-    /**
-     * ユーザの推測を判定し、候補をインクリメンタルに絞り込む
-     */
-    async checkGuess(guess: string): Promise<void> {
-      // バリデーション: 桁数・重複チェック
-      const pattern = new RegExp(`^\\d{${this.digitCount}}$`);
-      if (!pattern.test(guess) || new Set(guess).size !== this.digitCount) {
+    async checkGuess(guess: string) {
+      // バリデーション
+      const pat = new RegExp(`^\\d{${this.digitCount}}$`);
+      if (!pat.test(guess) || new Set(guess).size !== this.digitCount) {
         this.message = `${this.digitCount}桁の異なる数字を入力してください。`;
         return;
       }
 
-      // Hit/Blow 計算
-      let hit = 0;
-      let blow = 0;
+      // Hit/Blow
+      let hit = 0, blow = 0;
       for (let i = 0; i < this.digitCount; i++) {
         if (guess[i] === this.secret[i]) hit++;
         else if (this.secret.includes(guess[i])) blow++;
       }
-
-      // 履歴に追加
       this.history.push({ guess, hit, blow });
 
-      // インクリメンタル絞り込み
-      this.candidates = this.candidates.filter(candidate => {
-        let h = 0, b = 0;
-        for (let i = 0; i < this.digitCount; i++) {
-          if (candidate[i] === guess[i]) h++;
-          else if (guess.includes(candidate[i])) b++;
-        }
-        return h === hit && b === blow;
-      });
-      // スナップショット保存
-      this.candidatesHistory.push(this.candidates);
+      // 候補更新
+      await this.updateCandidates();
 
-      // メッセージ更新
-      if (this.digitCount === 1) {
-        this.message =
-          hit === 1
-            ? `正解！秘密の数字は ${this.secret} でした。`
-            : '不正解です。';
-      } else {
-        this.message =
-          hit === this.digitCount
-            ? `正解！秘密の数字は ${this.secret} でした。`
-            : `${hit} Hit, ${blow} Blow`;
-      }
-      // 正解時だけ履歴を保存
+      this.message = hit === this.digitCount
+        ? `正解！秘密の数字は ${this.secret} でした。`
+        : `${hit} Hit, ${blow} Blow`;
+
       if (hit === this.digitCount) {
         const attempts = this.history.length;
-        const elapsedMs = Date.now() - this.startTime;
-        // 経過ミリ秒ではなく、"日本時間の現在時刻" を取得して played_at に保存したい場合：
+        const elapsed = Date.now() - this.startTime;
         const playedAtJp = new Date().toLocaleString('ja-JP', {
-          timeZone: 'Asia/Tokyo',
-          hour12: false,       // 24時間制にしたい場合
+          timeZone: 'Asia/Tokyo', hour12: false
         });
-        await addResult(this.digitCount, attempts, elapsedMs, playedAtJp);
+        await addResult(this.digitCount, attempts, elapsed, playedAtJp);
       }
     },
 
-    /**
-     * 指定履歴インデックスまでロールバック
-     */
-    rollbackTo(index: number): void {
-      // 履歴と候補を巻き戻す
+    async updateCandidates() {
+      // Worker 呼び出しまたは同期フォールバック
+      try {
+        const worker = new CandidateWorker();
+        worker.postMessage({
+          digitCount: this.digitCount,
+          history: this.history
+        });
+        const filtered: string[] = await new Promise((resolve) => {
+          worker.onmessage = (e) => {
+            resolve(e.data as string[]);
+            worker.terminate();
+          };
+        });
+        this.candidates = filtered;
+      } catch (e) {
+        // Worker が使えない場合は同期処理
+        const all = allCandidatesFast(this.digitCount);
+        this.candidates = filterByHistory(all, this.history);
+      }
+      this.candidatesHistory.push(this.candidates);
+    },
+
+    rollbackTo(index: number) {
       this.history = this.history.slice(0, index);
       this.candidates = this.candidatesHistory[index];
       this.candidatesHistory = this.candidatesHistory.slice(0, index + 1);
-
-      this.message =
-        index > 0
-          ? `${index+1}回目からやり直します。`
-          : '最初からやり直しました。';
+      this.message = index > 0
+        ? `${index+1}回目からやり直します。`
+        : '最初からやり直しました。';
     },
-  },
+  }
 });
