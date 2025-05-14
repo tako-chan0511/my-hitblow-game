@@ -6,7 +6,9 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: "/my-hitblow-game/",  // ← ここを追加
+    base: process.env.DEPLOY_TARGET === 'GH_PAGES'
+    ? '/my-hitblow-game/'   // GitHub Pages 用サブパス
+    : '/',                  // それ以外（Vercel のルートなど）は / に
   plugins: [
     vue(),
     vueDevTools(),
