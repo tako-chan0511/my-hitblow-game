@@ -90,93 +90,93 @@ import {
   onMounted,
   onBeforeUnmount,
   defineEmits
-} from 'vue';
-import { useGameStore } from '@/stores/game';
+} from 'vue'
+import { useGameStore } from '@/stores/game'
 
-// 'close' と 'select' イベントを定義
+// モーダルを閉じるための 'close' イベント
 const emit = defineEmits<{
-  (e: 'close'): void;
-  (e: 'select', candidate: string): void;
-}>();
+  (e: 'close'): void
+}>()
 
-// 0–9 の数字リスト
-const numbers = Array.from({ length: 10 }, (_, i) => i.toString());
-const store = useGameStore();
+// Pinia ストア
+const store = useGameStore()
+
+// 数字一覧
+const numbers = Array.from({ length: 10 }, (_, i) => i.toString())
 
 // UI state
-const loading = ref(true);
-const candidates = ref<string[]>([]);
-const filterSlots = ref<string[]>([]);
-const pickerIdx = ref<number | null>(null);
+const loading = ref(true)
+const candidates = ref<string[]>([])
+const filterSlots = ref<string[]>([])
+const pickerIdx = ref<number | null>(null)
 
 // タイマー
-const showTimer = ref(false);
-const elapsedMs = ref(0);
-let timeoutId: number;
-let intervalId: number;
+const showTimer = ref(false)
+const elapsedMs = ref(0)
+let timeoutId: number
+let intervalId: number
 
 const formattedTime = computed(() => {
-  const s = Math.floor(elapsedMs.value / 1000);
-  const ms = elapsedMs.value % 1000;
-  return `${s}.${String(ms).padStart(3, '0')} 秒`;
-});
+  const s = Math.floor(elapsedMs.value / 1000)
+  const ms = elapsedMs.value % 1000
+  return `${s}.${String(ms).padStart(3, '0')} 秒`
+})
 
 // 初期候補取得＋フィルタ初期化＋タイマー
 async function generateCandidates() {
   timeoutId = window.setTimeout(() => {
-    showTimer.value = true;
-    const start = Date.now();
+    showTimer.value = true
+    const start = Date.now()
     intervalId = window.setInterval(
       () => (elapsedMs.value = Date.now() - start),
       100
-    );
-  }, 3000);
+    )
+  }, 3000)
 
   await new Promise<void>(resolve => {
     setTimeout(() => {
-      candidates.value = store.remainingCandidates;
-      resolve();
-    }, 0);
-  });
+      candidates.value = store.remainingCandidates
+      resolve()
+    }, 0)
+  })
 
   if (candidates.value.length) {
-    filterSlots.value = Array(candidates.value[0].length).fill('');
+    filterSlots.value = Array(candidates.value[0].length).fill('')
   }
 
-  clearTimeout(timeoutId);
-  clearInterval(intervalId);
-  loading.value = false;
+  clearTimeout(timeoutId)
+  clearInterval(intervalId)
+  loading.value = false
 }
 
-onMounted(generateCandidates);
+onMounted(generateCandidates)
 onBeforeUnmount(() => {
-  clearTimeout(timeoutId);
-  clearInterval(intervalId);
-});
+  clearTimeout(timeoutId)
+  clearInterval(intervalId)
+})
 
-// フィルタ済みの候補
+// フィルタ済みリスト
 const displayed = computed(() =>
   filterSlots.value.every(d => d === '')
     ? candidates.value
     : candidates.value.filter(num =>
         filterSlots.value.every((d, i) => d === '' || num[i] === d)
       )
-);
+)
 
-const displayedCount = computed(() => displayed.value.length);
-const displayedLimited = computed(() => displayed.value.slice(0, 1000));
+const displayedCount = computed(() => displayed.value.length)
+const displayedLimited = computed(() => displayed.value.slice(0, 1000))
 
-// スロットフィルタ更新
+// フィルタ更新
 function selectFilter(digit: string, idx: number) {
-  filterSlots.value[idx] = digit;
-  pickerIdx.value = null;
+  filterSlots.value[idx] = digit
+  pickerIdx.value = null
 }
 
-// ★ 10件以下時の選択処理
+// ↓↓↓ 変更箇所：ここで直接 Pinia にセットし、モーダルを閉じる ↓↓↓
 function selectCandidate(num: string) {
-  // ← ここを "candidate" ではなく "num" に！
-  emit('select', num);
-  emit('close');
+  store.setCurrentDigits(num.split(''))
+  emit('close')
 }
 </script>
 

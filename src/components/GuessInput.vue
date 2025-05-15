@@ -1,6 +1,9 @@
 <template>
   <div class="guess-input">
-    <!-- 数字スロット表示：Pinia ストアの currentDigits を直接使用 -->
+    <!-- 手動でモーダルを開くボタン -->
+  
+
+    <!-- スロットは Pinia の currentDigits から直接描画 -->
     <div class="slots">
       <div
         v-for="(digit, idx) in store.currentDigits"
@@ -12,7 +15,7 @@
       </div>
     </div>
 
-    <!-- 貼付＆判定 -->
+    <!-- 貼付＆判定エリア -->
     <div class="action-buttons">
       <div class="paste-input">
         <input
@@ -24,12 +27,16 @@
           貼付
         </button>
       </div>
-      <button class="submit-btn" :disabled="!isValid || loading" @click="submitGuess">
+      <button
+        class="submit-btn"
+        :disabled="!isValid || loading"
+        @click="submitGuess"
+      >
         判定
       </button>
     </div>
 
-    <!-- ローディング中表示 -->
+    <!-- 判定中タイマー -->
     <div v-if="loading" class="check-loading">
       <p>判定中…</p>
       <p v-if="showTimer">経過時間: {{ formattedTime }}</p>
@@ -57,7 +64,7 @@
       </div>
     </div>
 
-    <!-- モーダル：候補数が10以下になったら自動で表示 -->
+    <!-- モーダル -->
     <CandidateList
       v-if="showCandidates"
       @close="showCandidates = false"
@@ -67,42 +74,35 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
-import { useGameStore } from '@/stores/game';
-import CandidateList from '@/components/CandidateList.vue';
+import { ref, computed, watch } from 'vue'
+import { useGameStore } from '@/stores/game'
+import CandidateList from '@/components/CandidateList.vue'
 
-const store = useGameStore();
+const store = useGameStore()
 
-// --- モーダル表示制御 ---
-// 候補数が10以下になったら自動でモーダルを開く
-const showCandidates = ref(false);
-watch(
-  () => store.candidates.length,
-  len => {
-    if (len <= 10) showCandidates.value = true;
-  }
-);
+// モーダル開閉
+const showCandidates = ref(false)
 
-// モーダルから選択された候補をストアに反映
+// モーダルから選んだ候補を Pinia に反映
 function applyCandidate(candidate: string) {
-  store.setCurrentDigits(candidate.split(''));
-  showCandidates.value = false;
+  store.setCurrentDigits(candidate.split(''))
+  showCandidates.value = false
 }
 
-// --- 貼付処理 ---
-const pasteValue = ref('');
+// 貼付処理
+const pasteValue = ref('')
 function pasteInput() {
-  const str = pasteValue.value.trim();
+  const s = pasteValue.value.trim()
   if (
-    str.length !== store.digitCount ||
-    !/^\d+$/.test(str) ||
-    new Set(str).size !== store.digitCount
+    s.length !== store.digitCount ||
+    !/^\d+$/.test(s) ||
+    new Set(s).size !== store.digitCount
   ) {
-    alert(`${store.digitCount}桁の重複なし数字を入力してください`);
-    return;
+    alert(`${store.digitCount}桁の重複なし数字を入力してください`)
+    return
   }
-  store.setCurrentDigits(str.split(''));
-  pasteValue.value = ''; // クリア
+  store.setCurrentDigits(s.split(''))
+  pasteValue.value = ''
 }
 
 // 判定ボタン有効化
@@ -110,76 +110,76 @@ const isValid = computed(
   () =>
     store.currentDigits.every(d => d !== '') &&
     new Set(store.currentDigits).size === store.digitCount
-);
+)
 
-// --- 判定実行 ---
-const loading = ref(false);
-const showTimer = ref(false);
-const elapsedMs = ref(0);
-let tId: number, iId: number;
+// 判定処理＋タイマー
+const loading = ref(false)
+const showTimer = ref(false)
+const elapsedMs = ref(0)
+let tId: number, iId: number
 
 const formattedTime = computed(() => {
-  const s = Math.floor(elapsedMs.value / 1000);
-  const ms = elapsedMs.value % 1000;
-  return `${s}.${String(ms).padStart(3, '0')} 秒`;
-});
+  const s = Math.floor(elapsedMs.value / 1000)
+  const ms = elapsedMs.value % 1000
+  return `${s}.${String(ms).padStart(3, '0')} 秒`
+})
 
 async function submitGuess() {
-  if (!isValid.value || loading.value) return;
-  loading.value = true;
-  const start = Date.now();
-  tId = window.setTimeout(() => (showTimer.value = true), 3000);
-  iId = window.setInterval(() => (elapsedMs.value = Date.now() - start), 100);
+  if (!isValid.value || loading.value) return
+  loading.value = true
+  const start = Date.now()
+  tId = window.setTimeout(() => (showTimer.value = true), 3000)
+  iId = window.setInterval(() => (elapsedMs.value = Date.now() - start), 100)
 
-  await new Promise(r => setTimeout(r, 0));
-  await store.checkGuess(store.currentDigits.join(''));
+  await new Promise(r => setTimeout(r, 0))
+  await store.checkGuess(store.currentDigits.join(''))
 
-  clearTimeout(tId);
-  clearInterval(iId);
-  loading.value = false;
-  showTimer.value = false;
-  elapsedMs.value = 0;
+  clearTimeout(tId)
+  clearInterval(iId)
+  loading.value = false
+  showTimer.value = false
+  elapsedMs.value = 0
 }
 
-// --- 数字ピッカー ---
-const pickerVisible = ref(false);
-const currentIdx = ref<number | null>(null);
-const numbers = Array.from({ length: 10 }, (_, i) => i.toString());
+// 数字ピッカー制御
+const pickerVisible = ref(false)
+const currentIdx = ref<number | null>(null)
+const numbers = Array.from({ length: 10 }, (_, i) => i.toString())
 
 function openPicker(idx: number) {
-  currentIdx.value = idx;
-  pickerVisible.value = true;
+  currentIdx.value = idx
+  pickerVisible.value = true
 }
 function closePicker() {
-  pickerVisible.value = false;
-  currentIdx.value = null;
+  pickerVisible.value = false
+  currentIdx.value = null
 }
 function selectDigit(n: string) {
-  if (currentIdx.value === null) return;
-  const arr = [...store.currentDigits];
-  arr[currentIdx.value] = n;
-  store.setCurrentDigits(arr);
-  closePicker();
+  if (currentIdx.value === null) return
+  const arr = [...store.currentDigits]
+  arr[currentIdx.value] = n
+  store.setCurrentDigits(arr)
+  closePicker()
 }
 function clearDigit() {
-  if (currentIdx.value === null) return;
-  const arr = [...store.currentDigits];
-  arr[currentIdx.value] = '';
-  store.setCurrentDigits(arr);
-  closePicker();
+  if (currentIdx.value === null) return
+  const arr = [...store.currentDigits]
+  arr[currentIdx.value] = ''
+  store.setCurrentDigits(arr)
+  closePicker()
 }
 function isSelected(n: string) {
-  return store.currentDigits.includes(n);
+  return store.currentDigits.includes(n)
 }
 
-// --- 桁数変更時リセット ---
+// 桁数変更でクリア
 watch(
   () => store.digitCount,
   cnt => {
-    store.setCurrentDigits(Array.from({ length: cnt }, () => ''));
-    pasteValue.value = '';
+    store.setCurrentDigits(Array.from({ length: cnt }, () => ''))
+    pasteValue.value = ''
   }
-);
+)
 </script>
 
 <style scoped>
