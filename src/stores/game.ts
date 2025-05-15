@@ -21,6 +21,7 @@ export interface GameState {
   startTime: number;
   candidates: string[];
   candidatesHistory: string[][];
+  currentDigits: string[]
 }
 
 // 重複なしランダム文字列を生成
@@ -44,6 +45,7 @@ export const useGameStore = defineStore('game', {
       startTime: Date.now(),
       candidates: cands,
       candidatesHistory: [cands],
+      currentDigits: Array.from({ length: initialDigit }, () => '')
     };
   },
 
@@ -56,6 +58,11 @@ export const useGameStore = defineStore('game', {
     setDigitCount(count: number) {
       this.digitCount = Math.max(1, Math.min(10, count));
       this.reset();
+      this.currentDigits = Array.from({ length: this.digitCount }, () => '')
+    },
+    // 追加：現在のスロット入力を更新
+    setCurrentDigits(digits: string[]) {
+      this.currentDigits = digits
     },
 
     reset() {
@@ -66,6 +73,7 @@ export const useGameStore = defineStore('game', {
       const all = allCandidatesFast(this.digitCount);
       this.candidates = all;
       this.candidatesHistory = [all];
+      this.currentDigits = Array.from({ length: this.digitCount }, () => '')
     },
 
     async checkGuess(guess: string) {
@@ -99,6 +107,8 @@ export const useGameStore = defineStore('game', {
         });
         await addResult(this.digitCount, attempts, elapsed, playedAtJp);
       }
+      // 送信後はスロットをクリア
+      this.currentDigits = Array.from({ length: this.digitCount }, () => '')
     },
 
     async updateCandidates() {

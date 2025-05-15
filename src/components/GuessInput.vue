@@ -1,18 +1,18 @@
 <template>
   <div class="guess-input">
-    <!-- 数字スロット表示 -->
+    <!-- 数字スロット表示：Pinia ストアの currentDigits を直接使用 -->
     <div class="slots">
       <div
-        v-for="(digit, idx) in digits"
+        v-for="(digit, idx) in store.currentDigits"
         :key="idx"
         class="slot"
         @click="openPicker(idx)"
       >
-        {{ digit !== '' ? digit : 'ー' }}
+        {{ digit || 'ー' }}
       </div>
     </div>
 
-    <!-- 判定ボタンと貼付入力 -->
+    <!-- 貼付＆判定 -->
     <div class="action-buttons">
       <div class="paste-input">
         <input
@@ -20,36 +20,24 @@
           :placeholder="`${store.digitCount}桁の数字を貼り付け`"
           :maxlength="store.digitCount"
         />
-        <button
-          class="paste-btn"
-          :disabled="loading"
-          @click="pasteInput"
-        >
+        <button class="paste-btn" :disabled="loading" @click="pasteInput">
           貼付
         </button>
       </div>
-      <button
-        class="submit-btn"
-        :disabled="!isValid || loading"
-        @click="submitGuess"
-      >
+      <button class="submit-btn" :disabled="!isValid || loading" @click="submitGuess">
         判定
       </button>
     </div>
 
-    <!-- ローディング中の表示 -->
+    <!-- ローディング中表示 -->
     <div v-if="loading" class="check-loading">
       <p>判定中…</p>
       <p v-if="showTimer">経過時間: {{ formattedTime }}</p>
     </div>
 
-    <!-- 数字ピッカーのポップアップ -->
-    <div
-      v-if="pickerVisible"
-      class="picker-overlay"
-      @click.self="closePicker"
-    >
-      <div class="picker-panel">
+    <!-- 数字ピッカー -->
+    <div v-if="pickerVisible" class="picker-overlay" @click.self="closePicker">
+      <div class="picker-panel" @click.stop>
         <button
           v-for="n in numbers"
           :key="n"
@@ -59,42 +47,76 @@
         >
           {{ n }}
         </button>
-        <!-- 削除ボタンは、スロットが空のとき無効化 -->
         <button
           class="picker-btn delete-btn"
           @click="clearDigit"
-          :disabled="currentIdx === null || digits[currentIdx] === ''"
+          :disabled="currentIdx === null || !store.currentDigits[currentIdx]"
         >
           削除
         </button>
       </div>
     </div>
+
+    <!-- モーダル：候補数が10以下になったら自動で表示 -->
+    <CandidateList
+      v-if="showCandidates"
+      @close="showCandidates = false"
+      @select="applyCandidate"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import { useGameStore } from '@/stores/game';
+import CandidateList from '@/components/CandidateList.vue';
 
 const store = useGameStore();
 
-// 候補数字リスト (0-9)
-const numbers = Array.from({ length: 10 }, (_, i) => i);
+// --- モーダル表示制御 ---
+// 候補数が10以下になったら自動でモーダルを開く
+const showCandidates = ref(false);
+watch(
+  () => store.candidates.length,
+  len => {
+    if (len <= 10) showCandidates.value = true;
+  }
+);
 
-// スロット入力値
-const digits = ref<string[]>(Array.from({ length: store.digitCount }, () => ''));
-// 貼付用文字列
-const pasteValue = ref<string>('');
-// ピッカー表示制御
-const pickerVisible = ref(false);
-const currentIdx = ref<number | null>(null);
+// モーダルから選択された候補をストアに反映
+function applyCandidate(candidate: string) {
+  store.setCurrentDigits(candidate.split(''));
+  showCandidates.value = false;
+}
 
-// ローディング／タイマー
+// --- 貼付処理 ---
+const pasteValue = ref('');
+function pasteInput() {
+  const str = pasteValue.value.trim();
+  if (
+    str.length !== store.digitCount ||
+    !/^\d+$/.test(str) ||
+    new Set(str).size !== store.digitCount
+  ) {
+    alert(`${store.digitCount}桁の重複なし数字を入力してください`);
+    return;
+  }
+  store.setCurrentDigits(str.split(''));
+  pasteValue.value = ''; // クリア
+}
+
+// 判定ボタン有効化
+const isValid = computed(
+  () =>
+    store.currentDigits.every(d => d !== '') &&
+    new Set(store.currentDigits).size === store.digitCount
+);
+
+// --- 判定実行 ---
 const loading = ref(false);
 const showTimer = ref(false);
 const elapsedMs = ref(0);
-let triggerTimeout: number;
-let timerInterval: number;
+let tId: number, iId: number;
 
 const formattedTime = computed(() => {
   const s = Math.floor(elapsedMs.value / 1000);
@@ -102,7 +124,28 @@ const formattedTime = computed(() => {
   return `${s}.${String(ms).padStart(3, '0')} 秒`;
 });
 
-// スロット編集
+async function submitGuess() {
+  if (!isValid.value || loading.value) return;
+  loading.value = true;
+  const start = Date.now();
+  tId = window.setTimeout(() => (showTimer.value = true), 3000);
+  iId = window.setInterval(() => (elapsedMs.value = Date.now() - start), 100);
+
+  await new Promise(r => setTimeout(r, 0));
+  await store.checkGuess(store.currentDigits.join(''));
+
+  clearTimeout(tId);
+  clearInterval(iId);
+  loading.value = false;
+  showTimer.value = false;
+  elapsedMs.value = 0;
+}
+
+// --- 数字ピッカー ---
+const pickerVisible = ref(false);
+const currentIdx = ref<number | null>(null);
+const numbers = Array.from({ length: 10 }, (_, i) => i.toString());
+
 function openPicker(idx: number) {
   currentIdx.value = idx;
   pickerVisible.value = true;
@@ -111,72 +154,32 @@ function closePicker() {
   pickerVisible.value = false;
   currentIdx.value = null;
 }
-function selectDigit(n: number) {
-  if (currentIdx.value == null) return;
-  digits.value[currentIdx.value] = String(n);
+function selectDigit(n: string) {
+  if (currentIdx.value === null) return;
+  const arr = [...store.currentDigits];
+  arr[currentIdx.value] = n;
+  store.setCurrentDigits(arr);
   closePicker();
 }
 function clearDigit() {
-  if (currentIdx.value == null) return;
-  digits.value[currentIdx.value] = '';
+  if (currentIdx.value === null) return;
+  const arr = [...store.currentDigits];
+  arr[currentIdx.value] = '';
+  store.setCurrentDigits(arr);
   closePicker();
 }
-function isSelected(n: number): boolean {
-  return digits.value.includes(String(n));
+function isSelected(n: string) {
+  return store.currentDigits.includes(n);
 }
 
-// 貼付処理
-function pasteInput() {
-  const str = pasteValue.value;
-  if (str.length !== store.digitCount) {
-    alert(`${store.digitCount}桁の文字列を貼り付けてください`);
-    return;
-  }
-  if (!/^\d+$/.test(str) || new Set(str).size !== store.digitCount) {
-    alert('重複なく数字のみを貼り付けてください');
-    return;
-  }
-  digits.value = str.split('');
-}
-
-// バリデーション
-const isValid = computed(() => {
-  return (
-    digits.value.every(d => d !== '') &&
-    new Set(digits.value).size === store.digitCount
-  );
-});
-
-// 桁数変更時リセット
+// --- 桁数変更時リセット ---
 watch(
   () => store.digitCount,
-  newCount => {
-    digits.value = Array.from({ length: newCount }, () => '');
+  cnt => {
+    store.setCurrentDigits(Array.from({ length: cnt }, () => ''));
     pasteValue.value = '';
   }
 );
-
-// 判定実行
-async function submitGuess(): Promise<void> {
-  if (!isValid.value || loading.value) return;
-  loading.value = true;
-  const start = Date.now();
-  triggerTimeout = window.setTimeout(() => (showTimer.value = true), 3000);
-  timerInterval = window.setInterval(() => {
-    elapsedMs.value = Date.now() - start;
-  }, 100);
-
-  await new Promise(r => setTimeout(r, 0));
-  store.checkGuess(digits.value.join(''));
-  digits.value = Array.from({ length: store.digitCount }, () => '');
-  pasteValue.value = '';
-
-  clearTimeout(triggerTimeout);
-  clearInterval(timerInterval);
-  loading.value = false;
-  showTimer.value = false;
-  elapsedMs.value = 0;
-}
 </script>
 
 <style scoped>
@@ -184,6 +187,18 @@ async function submitGuess(): Promise<void> {
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+.candidate-btn {
+  margin-bottom: 12px;
+  padding: 6px 12px;
+  background-color: var(--primary-color);
+  color: var(--bg-color);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.candidate-btn:hover {
+  opacity: 0.8;
 }
 .slots {
   display: flex;

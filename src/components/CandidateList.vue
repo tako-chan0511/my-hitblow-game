@@ -1,9 +1,10 @@
 <template>
-  <div class="overlay" @click.self="$emit('close')">
-    <div class="panel">
-      <button class="close-btn" @click="$emit('close')">閉じる</button>
+  <div class="overlay" @click.self="emit('close')">
+    <div class="panel" @click.stop>
+      <button class="close-btn" @click="emit('close')">閉じる</button>
 
-      <template v-if="!loading">
+      <!-- ロード後 -->
+      <div v-if="!loading">
         <!-- フィルタースロット -->
         <div class="filter-slots">
           <div
@@ -17,10 +18,7 @@
             >
               {{ slot === '' ? '―' : slot }}
             </button>
-
-            <!-- クリックされたスロットだけに候補を表示 -->
             <div v-if="pickerIdx === idx" class="filter-picker-panel">
-              <!-- 数字候補ボタン：一度選んだ数字は disabled -->
               <button
                 v-for="num in numbers"
                 :key="num"
@@ -30,7 +28,6 @@
               >
                 {{ num }}
               </button>
-              <!-- 削除ボタン：スロットが空のとき disabled -->
               <button
                 class="filter-picker-clear"
                 :disabled="filterSlots[idx] === ''"
@@ -42,7 +39,7 @@
           </div>
         </div>
 
-        <!-- 件数表示＆1000件制限 -->
+        <!-- 件数＆制限 -->
         <h2>残り候補 ({{ displayedCount }})</h2>
         <p v-if="displayedCount > 1000" class="limit-notice">
           ※先頭1000件のみ表示しています
@@ -50,15 +47,32 @@
 
         <!-- 候補リスト -->
         <div class="list">
-          <span
-            v-for="num in displayedLimited"
-            :key="num"
-            class="list-item"
-          >
-            {{ num }}
-          </span>
+          <!-- 10件以下ならボタン化＋ガイダンス -->
+          <div v-if="displayedCount <= 10" class="button-mode">
+            <p class="guide">
+              残り候補が10件以下になりました。クリックするとメインのスロットに反映されます。
+            </p>
+            <button
+              v-for="num in displayed"
+              :key="num"
+              class="list-item-button"
+              @click="selectCandidate(num)"
+            >
+              {{ num }}
+            </button>
+          </div>
+          <!-- 11件以上なら通常テキストで先頭1000件まで -->
+          <div v-else class="text-mode">
+            <span
+              v-for="num in displayedLimited"
+              :key="num"
+              class="list-item"
+            >
+              {{ num }}
+            </span>
+          </div>
         </div>
-      </template>
+      </div>
 
       <!-- ローディング中 -->
       <div v-else class="loading">
@@ -70,15 +84,26 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
-// 全数字リスト(0〜9)を常に表示し、無効ボタンはdisabledで制御
-const numbers = Array.from({ length: 10 }, (_, i) => i.toString());
+import {
+  ref,
+  computed,
+  onMounted,
+  onBeforeUnmount,
+  defineEmits
+} from 'vue';
 import { useGameStore } from '@/stores/game';
 
-// ストア
+// 'close' と 'select' イベントを定義
+const emit = defineEmits<{
+  (e: 'close'): void;
+  (e: 'select', candidate: string): void;
+}>();
+
+// 0–9 の数字リスト
+const numbers = Array.from({ length: 10 }, (_, i) => i.toString());
 const store = useGameStore();
 
-// ローディング／候補／フィルタスロット
+// UI state
 const loading = ref(true);
 const candidates = ref<string[]>([]);
 const filterSlots = ref<string[]>([]);
@@ -87,74 +112,71 @@ const pickerIdx = ref<number | null>(null);
 // タイマー
 const showTimer = ref(false);
 const elapsedMs = ref(0);
-let triggerTimeout: number;
-let timerInterval: number;
+let timeoutId: number;
+let intervalId: number;
 
-// 時間フォーマット
 const formattedTime = computed(() => {
   const s = Math.floor(elapsedMs.value / 1000);
   const ms = elapsedMs.value % 1000;
   return `${s}.${String(ms).padStart(3, '0')} 秒`;
 });
 
-// 候補取得＋スロット初期化＋タイマー
+// 初期候補取得＋フィルタ初期化＋タイマー
 async function generateCandidates() {
-  triggerTimeout = window.setTimeout(() => {
+  timeoutId = window.setTimeout(() => {
     showTimer.value = true;
     const start = Date.now();
-    timerInterval = window.setInterval(() => {
-      elapsedMs.value = Date.now() - start;
-    }, 100);
+    intervalId = window.setInterval(
+      () => (elapsedMs.value = Date.now() - start),
+      100
+    );
   }, 3000);
 
-  await new Promise<void>((resolve) => {
+  await new Promise<void>(resolve => {
     setTimeout(() => {
       candidates.value = store.remainingCandidates;
       resolve();
     }, 0);
   });
 
-  if (candidates.value.length > 0) {
+  if (candidates.value.length) {
     filterSlots.value = Array(candidates.value[0].length).fill('');
   }
 
-  clearTimeout(triggerTimeout);
-  clearInterval(timerInterval);
+  clearTimeout(timeoutId);
+  clearInterval(intervalId);
   loading.value = false;
 }
 
 onMounted(generateCandidates);
 onBeforeUnmount(() => {
-  clearTimeout(triggerTimeout);
-  clearInterval(timerInterval);
+  clearTimeout(timeoutId);
+  clearInterval(intervalId);
 });
 
-// 絞り込み後の全件
+// フィルタ済みの候補
 const displayed = computed(() =>
-  filterSlots.value.every((d) => d === '')
+  filterSlots.value.every(d => d === '')
     ? candidates.value
-    : candidates.value.filter((num) =>
+    : candidates.value.filter(num =>
         filterSlots.value.every((d, i) => d === '' || num[i] === d)
       )
 );
 
-// 件数・1000件制限
 const displayedCount = computed(() => displayed.value.length);
 const displayedLimited = computed(() => displayed.value.slice(0, 1000));
 
-// 各スロットにあり得る数字一覧（重複排除・ソート）
-const possibleDigitsBySlot = computed(() => {
-  if (!displayed.value.length) return [];
-  return Array.from({ length: displayed.value[0].length }, (_, idx) => {
-    const set = new Set(displayed.value.map((num) => num[idx]));
-    return Array.from(set).sort();
-  });
-});
-
-// スロットへ数字セット／クリア
+// スロットフィルタ更新
 function selectFilter(digit: string, idx: number) {
   filterSlots.value[idx] = digit;
   pickerIdx.value = null;
+}
+
+// ★ 10件以下時の選択処理
+function selectCandidate(num: string) {
+  // ← ここを "candidate" ではなく "num" に！
+  emit('select', num);
+  emit('close');
 }
 </script>
 
@@ -174,80 +196,77 @@ function selectFilter(digit: string, idx: number) {
 }
 .close-btn {
   background: none; border: none; font-size: 18px;
-  cursor: pointer; color: var(--text-color);
-  margin-bottom: 12px;
+  cursor: pointer; color: var(--text-color); margin-bottom: 12px;
 }
-.filter-slots {
-  display: flex; gap: 8px; margin-bottom: 12px;
-  justify-content: center;
-}
-.slot-wrapper {
-  position: relative;
-}
+
+/* フィルタスロット */
+.filter-slots { display: flex; gap: 8px; margin-bottom: 12px; justify-content: center; }
+.slot-wrapper { position: relative; }
 .filter-slot {
   width: 40px; height: 40px; font-size: 20px;
-  text-align: center; border: 1px solid #ccc; border-radius: 4px;
+  border: 1px solid #ccc; border-radius: 4px;
   background: var(--bg-color); color: var(--text-color);
   cursor: pointer;
 }
 .filter-picker-panel {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 50%; transform: translateX(-50%);
-  background: var(--bg-color);
-  padding: 8px; border-radius: 6px;
+  position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%);
+  background: var(--bg-color); padding: 8px; border-radius: 6px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-  display: grid; grid-template-columns: repeat(6, auto);
-  gap: 6px; justify-content: center; z-index: 1001;
+  display: grid; grid-template-columns: repeat(6, auto); gap: 6px; justify-content: center;
+  z-index: 1001;
 }
-.filter-picker-btn {
+.filter-picker-btn, .filter-picker-clear {
   width: 40px; height: 40px; font-size: 20px;
   border: 1px solid #ccc; border-radius: 4px;
-  background: var(--primary-color);
-  color: var(--bg-color); cursor: pointer;
   display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.filter-picker-btn {
+  background: var(--primary-color); color: var(--bg-color);
 }
 .filter-picker-btn:disabled {
-  background-color: #ddd;
-  color: #888;
-  cursor: not-allowed;
+  background-color: #ddd; color: #888; cursor: not-allowed;
 }
 .filter-picker-clear {
-  /* 固定幅を解除しテキストに合わせる */
-  min-width: 40px;
-  height: 40px;
-  padding: 0 8px;
-  font-size: 18px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  background: red;
-  color: white;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  white-space: nowrap;
+  background: red; color: white; padding: 0 8px; white-space: nowrap;
 }
 .filter-picker-clear:disabled {
-  background-color: #ddd;
-  color: #888;
-  cursor: not-allowed;
+  background-color: #ddd; color: #888; cursor: not-allowed;
 }
-.limit-notice {
-  font-size: 0.9em; color: #888; text-align: center; margin: 4px 0;
-}
+
+/* 件数＆制限 */
+.limit-notice { font-size: 0.9em; color: #888; text-align: center; margin: 4px 0; }
+
+/* 候補リスト：中央揃え */
 .list {
   display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px;
+  justify-content: center;
 }
+/* 通常テキスト */
 .list-item {
   display: inline-block; margin: 2px 4px; padding: 4px 8px;
   background-color: var(--primary-color); color: var(--bg-color);
   border-radius: 4px; font-family: monospace;
 }
+/* 10件以下ボタン化 */
+.list-item-button {
+  display: inline-block; margin: 2px 4px; padding: 4px 8px;
+   background-color: var(--primary-color); color: var(--bg-color);
+  border: none; border-radius: 4px; font-family: monospace;
+  cursor: pointer;
+}
+.list-item-button:hover {
+  opacity: 0.8;
+}
+
+/* ガイダンス文言 */
+.guide {
+  width: 100%; text-align: center;
+  margin: 8px 0; color: #666; font-size: 0.9em;
+}
+
+/* ローディング */
 .loading p {
   margin: 8px 0; font-size: 16px; color: var(--text-color);
-}
-button:hover:not(:disabled) {
-  opacity: 0.8;
 }
 </style>
