@@ -7,7 +7,11 @@
       <div class="hint-control">
         <label for="hintCount">ヒント数：</label>
         <select id="hintCount" v-model.number="hintCount">
-          <option v-for="n in maxHints" :key="n" :value="n">{{ n }} 個</option>
+          <option
+            v-for="n in hintOptions"
+            :key="n"
+            :value="n"
+          >{{ n }} 個</option>
         </select>
       </div>
 
@@ -90,22 +94,30 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import {
+  ref,
+  computed,
+  onMounted,
+  onBeforeUnmount,
+  watch
+} from 'vue'
 import { useGameStore } from '@/stores/game'
 
-// 'close' イベント
+// モーダルを閉じるための 'close' イベント
 const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
+// Pinia ストア
 const store = useGameStore()
 
-// ヒント用
+// ヒント数プルダウン：store.digitCount に応じて 1～digitCount
 const hintCount = ref(0)
-// 最大ヒント数は桁数か3の小さい方
-const maxHints = computed(() => Math.min(store.digitCount, 3))
+const hintOptions = computed(() =>
+  Array.from({ length: store.digitCount }, (_, i) => i + 1)
+)
 
-// 全数字リスト
+// 数字一覧
 const numbers = Array.from({ length: 10 }, (_, i) => i.toString())
 
 // UI state
@@ -126,7 +138,7 @@ const formattedTime = computed(() => {
   return `${s}.${String(ms).padStart(3, '0')} 秒`
 })
 
-// 初期候補取得
+// 初期候補取得＋フィルタ初期化＋タイマー
 async function generateCandidates() {
   timeoutId = window.setTimeout(() => {
     showTimer.value = true
@@ -159,7 +171,7 @@ onBeforeUnmount(() => {
   clearInterval(intervalId)
 })
 
-// 絞り込み後のリスト
+// フィルタ済みリスト
 const displayed = computed(() =>
   filterSlots.value.every(d => d === '')
     ? candidates.value
@@ -176,13 +188,11 @@ function selectFilter(digit: string, idx: number) {
   pickerIdx.value = null
 }
 
-// ★ ヒント数選択時に即座に正解桁をランダム反映 ★
+// ヒント数が変わるたびに、ランダムで secret の該当桁をスロットに書き込む
 watch([hintCount, () => store.secret], () => {
   const n = hintCount.value
   const len = filterSlots.value.length
-  // 全スロットをクリア
   const newSlots = Array(len).fill('')
-  // 乱数で n 個のインデックスを抽出
   const indices = Array.from({ length: len }, (_, i) => i)
     .sort(() => 0.5 - Math.random())
     .slice(0, n)
@@ -192,7 +202,7 @@ watch([hintCount, () => store.secret], () => {
   filterSlots.value = newSlots
 })
 
-// ★ 10 件以下時の候補選択処理 ★
+// 10件以下時の候補選択処理
 function selectCandidate(num: string) {
   store.setCurrentDigits(num.split(''))
   emit('close')
@@ -222,9 +232,7 @@ function selectCandidate(num: string) {
   display: flex; align-items: center; gap: 8px;
   margin-bottom: 12px;
 }
-.hint-control label {
-  font-weight: bold;
-}
+.hint-control label { font-weight: bold; }
 
 .filter-slots { display: flex; gap: 8px; margin-bottom: 12px; justify-content: center; }
 .hint-controls {
