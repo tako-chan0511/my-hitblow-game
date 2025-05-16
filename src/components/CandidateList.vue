@@ -3,6 +3,14 @@
     <div class="panel" @click.stop>
       <button class="close-btn" @click="emit('close')">閉じる</button>
 
+      <!-- ヒントプルダウン -->
+      <div class="hint-control">
+        <label for="hintCount">ヒント数：</label>
+        <select id="hintCount" v-model.number="hintCount">
+          <option v-for="n in maxHints" :key="n" :value="n">{{ n }} 個</option>
+        </select>
+      </div>
+
       <!-- ロード後 -->
       <div v-if="!loading">
         <!-- フィルタースロット -->
@@ -47,10 +55,9 @@
 
         <!-- 候補リスト -->
         <div class="list">
-          <!-- 10件以下ならボタン化＋ガイダンス -->
           <div v-if="displayedCount <= 10" class="button-mode">
             <p class="guide">
-              残り候補が10件以下になりました。クリックするとメインのスロットに反映されます。
+              残り候補が10件以下です。クリックするとメインのスロットに反映されます。
             </p>
             <button
               v-for="num in displayed"
@@ -61,7 +68,6 @@
               {{ num }}
             </button>
           </div>
-          <!-- 11件以上なら通常テキストで先頭1000件まで -->
           <div v-else class="text-mode">
             <span
               v-for="num in displayedLimited"
@@ -84,24 +90,22 @@
 </template>
 
 <script setup lang="ts">
-import {
-  ref,
-  computed,
-  onMounted,
-  onBeforeUnmount,
-  defineEmits
-} from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useGameStore } from '@/stores/game'
 
-// モーダルを閉じるための 'close' イベント
+// 'close' イベント
 const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
-// Pinia ストア
 const store = useGameStore()
 
-// 数字一覧
+// ヒント用
+const hintCount = ref(0)
+// 最大ヒント数は桁数か3の小さい方
+const maxHints = computed(() => Math.min(store.digitCount, 3))
+
+// 全数字リスト
 const numbers = Array.from({ length: 10 }, (_, i) => i.toString())
 
 // UI state
@@ -122,7 +126,7 @@ const formattedTime = computed(() => {
   return `${s}.${String(ms).padStart(3, '0')} 秒`
 })
 
-// 初期候補取得＋フィルタ初期化＋タイマー
+// 初期候補取得
 async function generateCandidates() {
   timeoutId = window.setTimeout(() => {
     showTimer.value = true
@@ -155,7 +159,7 @@ onBeforeUnmount(() => {
   clearInterval(intervalId)
 })
 
-// フィルタ済みリスト
+// 絞り込み後のリスト
 const displayed = computed(() =>
   filterSlots.value.every(d => d === '')
     ? candidates.value
@@ -163,25 +167,103 @@ const displayed = computed(() =>
         filterSlots.value.every((d, i) => d === '' || num[i] === d)
       )
 )
-
 const displayedCount = computed(() => displayed.value.length)
 const displayedLimited = computed(() => displayed.value.slice(0, 1000))
 
-// フィルタ更新
+// スロットフィルタ更新
 function selectFilter(digit: string, idx: number) {
   filterSlots.value[idx] = digit
   pickerIdx.value = null
 }
 
-// ↓↓↓ 変更箇所：ここで直接 Pinia にセットし、モーダルを閉じる ↓↓↓
+// ★ ヒント数選択時に即座に正解桁をランダム反映 ★
+watch([hintCount, () => store.secret], () => {
+  const n = hintCount.value
+  const len = filterSlots.value.length
+  // 全スロットをクリア
+  const newSlots = Array(len).fill('')
+  // 乱数で n 個のインデックスを抽出
+  const indices = Array.from({ length: len }, (_, i) => i)
+    .sort(() => 0.5 - Math.random())
+    .slice(0, n)
+  indices.forEach(i => {
+    newSlots[i] = store.secret[i]
+  })
+  filterSlots.value = newSlots
+})
+
+// ★ 10 件以下時の候補選択処理 ★
 function selectCandidate(num: string) {
   store.setCurrentDigits(num.split(''))
   emit('close')
 }
 </script>
 
-
 <style scoped>
+.overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+}
+.panel {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  padding: 20px; border-radius: 8px;
+  max-height: 80vh; overflow-y: auto; width: 90%;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.close-btn {
+  background: none; border: none; font-size: 18px;
+  cursor: pointer; color: var(--text-color); margin-bottom: 12px;
+}
+/* ヒントプルダウン */
+.hint-control {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 12px;
+}
+.hint-control label {
+  font-weight: bold;
+}
+
+.filter-slots { display: flex; gap: 8px; margin-bottom: 12px; justify-content: center; }
+.hint-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.hint-controls select {
+  margin-top: 4px;
+  min-width: 120px;
+}
+.hint-note {
+  font-size: 0.8em;
+  color: #666;
+  margin-top: 4px;
+}
+
+.controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+.filter-slots { display: flex; gap: 8px; }
+.hint-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.hint-controls select {
+  margin-top: 4px;
+  min-width: 120px;
+}
+.hint-note {
+  font-size: 0.8em;
+  color: #666;
+  margin-top: 4px;
+}
+
 .overlay {
   position: fixed; top: 0; left: 0; right: 0; bottom: 0;
   background: rgba(0,0,0,0.5);

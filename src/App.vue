@@ -24,7 +24,7 @@
     <HistoryList />
 
     <!-- 残り候補ボタン -->
-    <button class="show-cands" @click="show = true">残り候補を表示</button>
+    <button class="show-cands" @click="show = true">サポート機能</button>
     <button class="reset" @click="store.reset()">再スタート</button>
     <CandidateList v-if="show" @close="show = false" />
 
