@@ -3,18 +3,6 @@
     <div class="panel" @click.stop>
       <button class="close-btn" @click="emit('close')">閉じる</button>
 
-      <!-- ヒントプルダウン -->
-      <div class="hint-control">
-        <label for="hintCount">ヒント数：</label>
-        <select id="hintCount" v-model.number="hintCount">
-          <option
-            v-for="n in hintOptions"
-            :key="n"
-            :value="n"
-          >{{ n }} 個</option>
-        </select>
-      </div>
-
       <!-- ロード後 -->
       <div v-if="!loading">
         <!-- フィルタースロット -->
@@ -53,33 +41,22 @@
 
         <!-- 件数＆制限 -->
         <h2>残り候補 ({{ displayedCount }})</h2>
-        <p v-if="displayedCount > 1000" class="limit-notice">
-          ※先頭1000件のみ表示しています
+        <p v-if="displayedCount > 100" class="limit-notice">
+          ※先頭100件のみ表示しています
         </p>
 
         <!-- 候補リスト -->
         <div class="list">
-          <div v-if="displayedCount <= 10" class="button-mode">
-            <p class="guide">
-              残り候補が10件以下です。クリックするとメインのスロットに反映されます。
-            </p>
+          <!-- すべてボタン化 -->
+          <div class="button-mode">
             <button
-              v-for="num in displayed"
+              v-for="num in displayedLimited"
               :key="num"
               class="list-item-button"
               @click="selectCandidate(num)"
             >
               {{ num }}
             </button>
-          </div>
-          <div v-else class="text-mode">
-            <span
-              v-for="num in displayedLimited"
-              :key="num"
-              class="list-item"
-            >
-              {{ num }}
-            </span>
           </div>
         </div>
       </div>
@@ -99,7 +76,7 @@ import {
   computed,
   onMounted,
   onBeforeUnmount,
-  watch
+  defineEmits,
 } from 'vue'
 import { useGameStore } from '@/stores/game'
 
@@ -110,12 +87,6 @@ const emit = defineEmits<{
 
 // Pinia ストア
 const store = useGameStore()
-
-// ヒント数プルダウン：store.digitCount に応じて 1～digitCount
-const hintCount = ref(0)
-const hintOptions = computed(() =>
-  Array.from({ length: store.digitCount }, (_, i) => i + 1)
-)
 
 // 数字一覧
 const numbers = Array.from({ length: 10 }, (_, i) => i.toString())
@@ -149,7 +120,7 @@ async function generateCandidates() {
     )
   }, 3000)
 
-  await new Promise<void>(resolve => {
+  await new Promise<void>((resolve) => {
     setTimeout(() => {
       candidates.value = store.remainingCandidates
       resolve()
@@ -173,36 +144,24 @@ onBeforeUnmount(() => {
 
 // フィルタ済みリスト
 const displayed = computed(() =>
-  filterSlots.value.every(d => d === '')
+  filterSlots.value.every((d) => d === '')
     ? candidates.value
-    : candidates.value.filter(num =>
+    : candidates.value.filter((num) =>
         filterSlots.value.every((d, i) => d === '' || num[i] === d)
       )
 )
-const displayedCount = computed(() => displayed.value.length)
-const displayedLimited = computed(() => displayed.value.slice(0, 1000))
 
-// スロットフィルタ更新
+const displayedCount = computed(() => displayed.value.length)
+// 最初の100件に変更
+const displayedLimited = computed(() => displayed.value.slice(0, 100))
+
+// フィルタ更新
 function selectFilter(digit: string, idx: number) {
   filterSlots.value[idx] = digit
   pickerIdx.value = null
 }
 
-// ヒント数が変わるたびに、ランダムで secret の該当桁をスロットに書き込む
-watch([hintCount, () => store.secret], () => {
-  const n = hintCount.value
-  const len = filterSlots.value.length
-  const newSlots = Array(len).fill('')
-  const indices = Array.from({ length: len }, (_, i) => i)
-    .sort(() => 0.5 - Math.random())
-    .slice(0, n)
-  indices.forEach(i => {
-    newSlots[i] = store.secret[i]
-  })
-  filterSlots.value = newSlots
-})
-
-// 10件以下時の候補選択処理
+// 候補選択処理
 function selectCandidate(num: string) {
   store.setCurrentDigits(num.split(''))
   emit('close')
@@ -227,137 +186,16 @@ function selectCandidate(num: string) {
   background: none; border: none; font-size: 18px;
   cursor: pointer; color: var(--text-color); margin-bottom: 12px;
 }
-/* ヒントプルダウン */
-.hint-control {
-  display: flex; align-items: center; gap: 8px;
-  margin-bottom: 12px;
-}
-.hint-control label { font-weight: bold; }
-
 .filter-slots { display: flex; gap: 8px; margin-bottom: 12px; justify-content: center; }
-.hint-controls {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
-.hint-controls select {
-  margin-top: 4px;
-  min-width: 120px;
-}
-.hint-note {
-  font-size: 0.8em;
-  color: #666;
-  margin-top: 4px;
-}
-
-.controls {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 12px;
-}
-.filter-slots { display: flex; gap: 8px; }
-.hint-controls {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
-.hint-controls select {
-  margin-top: 4px;
-  min-width: 120px;
-}
-.hint-note {
-  font-size: 0.8em;
-  color: #666;
-  margin-top: 4px;
-}
-
-.overlay {
-  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.5);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 1000;
-}
-.panel {
-  background-color: var(--bg-color);
-  color: var(--text-color);
-  padding: 20px; border-radius: 8px;
-  max-height: 80vh; overflow-y: auto; width: 90%;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-}
-.close-btn {
-  background: none; border: none; font-size: 18px;
-  cursor: pointer; color: var(--text-color); margin-bottom: 12px;
-}
-
-/* フィルタスロット */
-.filter-slots { display: flex; gap: 8px; margin-bottom: 12px; justify-content: center; }
-.slot-wrapper { position: relative; }
-.filter-slot {
-  width: 40px; height: 40px; font-size: 20px;
-  border: 1px solid #ccc; border-radius: 4px;
-  background: var(--bg-color); color: var(--text-color);
-  cursor: pointer;
-}
-.filter-picker-panel {
-  position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%);
-  background: var(--bg-color); padding: 8px; border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-  display: grid; grid-template-columns: repeat(6, auto); gap: 6px; justify-content: center;
-  z-index: 1001;
-}
-.filter-picker-btn, .filter-picker-clear {
-  width: 40px; height: 40px; font-size: 20px;
-  border: 1px solid #ccc; border-radius: 4px;
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer;
-}
-.filter-picker-btn {
-  background: var(--primary-color); color: var(--bg-color);
-}
-.filter-picker-btn:disabled {
-  background-color: #ddd; color: #888; cursor: not-allowed;
-}
-.filter-picker-clear {
-  background: red; color: white; padding: 0 8px; white-space: nowrap;
-}
-.filter-picker-clear:disabled {
-  background-color: #ddd; color: #888; cursor: not-allowed;
-}
-
-/* 件数＆制限 */
+.filter-slot { width: 40px; height: 40px; font-size: 20px; text-align: center; border: 1px solid #ccc; border-radius: 4px; background: var(--bg-color); color: var(--text-color); cursor: pointer; }
+.filter-picker-panel { position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%); background: var(--bg-color); padding: 8px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: grid; grid-template-columns: repeat(6, auto); gap: 6px; justify-content: center; z-index: 1001; }
+.filter-picker-btn { width: 40px; height: 40px; font-size: 20px; border: 1px solid #ccc; border-radius: 4px; background: var(--primary-color); color: var(--bg-color); cursor: pointer; }
+.filter-picker-btn:disabled { background-color: #ddd; color: #888; cursor: not-allowed; }
+.filter-picker-clear { min-width: 40px; height: 40px; padding: 0 8px; font-size: 18px; border: 1px solid #ccc; border-radius: 4px; background: red; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; white-space: nowrap; }
+.filter-picker-clear:disabled { background-color: #ddd; color: #888; cursor: not-allowed; }
 .limit-notice { font-size: 0.9em; color: #888; text-align: center; margin: 4px 0; }
-
-/* 候補リスト：中央揃え */
-.list {
-  display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px;
-  justify-content: center;
-}
-/* 通常テキスト */
-.list-item {
-  display: inline-block; margin: 2px 4px; padding: 4px 8px;
-  background-color: var(--primary-color); color: var(--bg-color);
-  border-radius: 4px; font-family: monospace;
-}
-/* 10件以下ボタン化 */
-.list-item-button {
-  display: inline-block; margin: 2px 4px; padding: 4px 8px;
-   background-color: var(--primary-color); color: var(--bg-color);
-  border: none; border-radius: 4px; font-family: monospace;
-  cursor: pointer;
-}
-.list-item-button:hover {
-  opacity: 0.8;
-}
-
-/* ガイダンス文言 */
-.guide {
-  width: 100%; text-align: center;
-  margin: 8px 0; color: #666; font-size: 0.9em;
-}
-
-/* ローディング */
-.loading p {
-  margin: 8px 0; font-size: 16px; color: var(--text-color);
-}
+.list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; justify-content: center; }
+.list-item-button { display: inline-block; margin: 2px 4px; padding: 4px 8px; background-color: var(--primary-color); color: var(--bg-color); border: none; border-radius: 4px; font-family: monospace; cursor: pointer; }
+.list-item-button:hover { opacity: 0.8; }
+.loading p { margin: 8px 0; font-size: 16px; color: var(--text-color); }
 </style>
