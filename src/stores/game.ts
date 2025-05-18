@@ -12,6 +12,17 @@ export interface HistoryEntry {
   blow: number;
 }
 
+// 対戦履歴エントリの型定義
+export interface VsHistoryEntry {
+  digitCount: number;            // 何桁ゲームだったか
+  result: 'win' | 'lose' | 'draw'; // 勝敗
+  userAttempts: number;          // 手数（共通）
+  compAttempts: number;          // コンピュータの手数
+  userSecret: string;            // あなたの秘密
+  compSecret: string;            // コンピュータの秘密
+  playedAt: string;              // プレイ日時（ISO文字列）
+}
+
 // ストアの状態型定義
 export interface GameState {
   digitCount: number;
@@ -21,7 +32,9 @@ export interface GameState {
   startTime: number;
   candidates: string[];
   candidatesHistory: string[][];
-  currentDigits: string[]
+  currentDigits: string[];
+  // 追加：対戦履歴
+  vsHistory: VsHistoryEntry[];
 }
 
 // 重複なしランダム文字列を生成
@@ -45,24 +58,28 @@ export const useGameStore = defineStore('game', {
       startTime: Date.now(),
       candidates: cands,
       candidatesHistory: [cands],
-      currentDigits: Array.from({ length: initialDigit }, () => '')
+      currentDigits: Array.from({ length: initialDigit }, () => ''),
+      vsHistory: []  // ここに対戦履歴を蓄積
     };
   },
 
   getters: {
     remainingCandidates: (s) => s.candidates,
     remainingCandidatesAt: (s) => (idx: number) => s.candidatesHistory[idx + 1] || [],
+    // 追加：新しい順に取得
+    getVsHistory: (s) => s.vsHistory
   },
 
   actions: {
     setDigitCount(count: number) {
       this.digitCount = Math.max(1, Math.min(10, count));
       this.reset();
-      this.currentDigits = Array.from({ length: this.digitCount }, () => '')
+      this.currentDigits = Array.from({ length: this.digitCount }, () => '');
     },
+
     // 追加：現在のスロット入力を更新
     setCurrentDigits(digits: string[]) {
-      this.currentDigits = digits
+      this.currentDigits = digits;
     },
 
     reset() {
@@ -73,7 +90,7 @@ export const useGameStore = defineStore('game', {
       const all = allCandidatesFast(this.digitCount);
       this.candidates = all;
       this.candidatesHistory = [all];
-      this.currentDigits = Array.from({ length: this.digitCount }, () => '')
+      this.currentDigits = Array.from({ length: this.digitCount }, () => '');
     },
 
     async checkGuess(guess: string) {
@@ -107,8 +124,9 @@ export const useGameStore = defineStore('game', {
         });
         await addResult(this.digitCount, attempts, elapsed, playedAtJp);
       }
+
       // 送信後はスロットをクリア
-      this.currentDigits = Array.from({ length: this.digitCount }, () => '')
+      this.currentDigits = Array.from({ length: this.digitCount }, () => '');
     },
 
     async updateCandidates() {
@@ -126,8 +144,7 @@ export const useGameStore = defineStore('game', {
           };
         });
         this.candidates = filtered;
-      } catch (e) {
-        // Worker が使えない場合は同期処理
+      } catch {
         const all = allCandidatesFast(this.digitCount);
         this.candidates = filterByHistory(all, this.history);
       }
@@ -142,5 +159,10 @@ export const useGameStore = defineStore('game', {
         ? `${index+1}回目からやり直します。`
         : '最初からやり直しました。';
     },
+
+    // 追加：対戦履歴にエントリを追加（新しい順）
+    addVsHistory(entry: VsHistoryEntry) {
+      this.vsHistory.unshift(entry);
+    }
   }
 });
