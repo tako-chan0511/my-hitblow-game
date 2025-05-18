@@ -49,6 +49,23 @@
       <div class="panel-col">
         <h3>あなたの推理</h3>
         <p>コンピュータの秘密を当ててください</p>
+
+        <!-- 貼付入力エリア -->
+        <div class="paste-input">
+          <input
+            v-model.trim="pasteValue"
+            :placeholder="`${digitCount}桁の数字を貼り付け`"
+            :maxlength="digitCount"
+          />
+          <button
+            class="paste-btn"
+            :disabled="!isPasteValid"
+            @click="pasteUserGuess"
+          >
+            貼付
+          </button>
+        </div>
+
         <div class="slots horizontal">
           <div
             v-for="(d, i) in userGuess"
@@ -122,6 +139,13 @@
         残念！コンピュータの勝ち… ({{ compAttempts }} 回)
       </p>
 
+      <!-- 秘密の数字表示 -->
+      <div class="final-secrets">
+        <p><strong>あなたの秘密:</strong> {{ userSecret.join('') }}</p>
+        <p><strong>コンピュータの秘密:</strong> {{ computerSecret }}</p>
+      </div>
+
+      <!-- 結果後も履歴は残す -->
       <div class="history-area">
         <div class="history-col">
           <h4>あなたの履歴</h4>
@@ -151,11 +175,11 @@ import { ref, computed, watch, onBeforeUnmount } from 'vue';
 import { useGameStore } from '@/stores/game';
 import { allCandidatesFast, filterByHistory } from '@/lib/candidate';
 
-// 1) ストア連携：App.vue の桁数セレクトと共有
+// ストアから桁数を共有
 const store = useGameStore();
 const digitCount = computed(() => store.digitCount);
 
-// 2) コンピュータ側データ（先に宣言）
+// コンピュータ／履歴データ
 let computerSecret = '';
 const userHistory    = ref<{attempt:number,guess:string,hit:number,blow:number}[]>([]);
 const compHistory    = ref<{attempt:number,guess:string,hit:number,blow:number}[]>([]);
@@ -163,21 +187,19 @@ const userAttempts   = ref(0);
 const compAttempts   = ref(0);
 const compCandidates = ref<string[]>([]);
 
-// 3) ステージ管理
+// ステージ管理
 const stage = ref<'inputSecret'|'playing'|'finished'>('inputSecret');
 
-// 4) ユーザー秘密／推理用配列
+// ユーザー秘密・推理配列
 const userSecret = ref<string[]>([]);
 const userGuess  = ref<string[]>([]);
 
-// 5) 数字ピッカー制御
+// ピッカー制御
 const pickerVisible = ref(false);
 const currentIdx    = ref<number|null>(null);
+const numbers       = Array.from({ length: 10 }, (_, i) => i.toString());
 
-// 6) 0–9 数字リスト
-const numbers = Array.from({ length: 10 }, (_, i) => i.toString());
-
-// 7) App.vue で桁数を変えたら、ここも即リセット
+// 桁数変更でリセット
 watch(
   () => digitCount.value,
   (cnt) => {
@@ -193,19 +215,35 @@ watch(
   { immediate: true }
 );
 
-// 8) 秘密入力完了判定
+// 秘密入力完了判定
 const secretReady = computed(() =>
   userSecret.value.every(d => d !== '') &&
   new Set(userSecret.value).size === digitCount.value
 );
 
-// 9) 推理入力完了判定
+// 推理入力完了判定
 const userGuessReady = computed(() =>
   userGuess.value.every(d => d !== '') &&
   new Set(userGuess.value).size === digitCount.value
 );
 
-// 10) Hit/Blow 計算
+// 貼付機能
+const pasteValue = ref('');
+const isPasteValid = computed(() => {
+  const s = pasteValue.value.trim();
+  return (
+    s.length === digitCount.value &&
+    /^\d+$/.test(s) &&
+    new Set(s).size === digitCount.value
+  );
+});
+function pasteUserGuess() {
+  if (!isPasteValid.value) return;
+  userGuess.value = pasteValue.value.trim().split('');
+  pasteValue.value = '';
+}
+
+// Hit/Blow 計算
 function calcHB(guess: string, secret: string) {
   let hit = 0, blow = 0;
   for (let i = 0; i < guess.length; i++) {
@@ -215,17 +253,17 @@ function calcHB(guess: string, secret: string) {
   return { hit, blow };
 }
 
-// 11) ゲーム開始
+// ゲーム開始
 function startGame() {
-  computerSecret       = Array.from({ length: digitCount.value }, () => {
+  computerSecret = Array.from({ length: digitCount.value }, () => {
     const nums = Array.from({ length: 10 }, (_, i) => i.toString());
     return nums.splice(Math.floor(Math.random() * nums.length), 1)[0];
   }).join('');
   compCandidates.value = allCandidatesFast(digitCount.value);
-  stage.value          = 'playing';
+  stage.value = 'playing';
 }
 
-// 12) ユーザーの手
+// ユーザーの手
 function submitUserGuess() {
   if (!userGuessReady.value || stage.value !== 'playing') return;
   userAttempts.value++;
@@ -237,7 +275,7 @@ function submitUserGuess() {
   computerTurn();
 }
 
-// 13) コンピュータの手
+// コンピュータの手
 function computerTurn() {
   if (stage.value !== 'playing') return;
   const guess = compCandidates.value[0];
@@ -248,7 +286,7 @@ function computerTurn() {
   if (hit === digitCount.value) finishGame();
 }
 
-// 14) 終了処理
+// 終了処理
 function finishGame() {
   stage.value = 'finished';
 }
@@ -259,7 +297,7 @@ const compFinished = computed(() =>
   compHistory.value.some(h => h.hit === digitCount.value)
 );
 
-// 15) もう一度
+// リセット
 function resetVs() {
   userSecret.value     = Array(digitCount.value).fill('');
   userGuess.value      = Array(digitCount.value).fill('');
@@ -271,7 +309,7 @@ function resetVs() {
   stage.value          = 'inputSecret';
 }
 
-// 16) ピッカー操作
+// ピッカー操作
 function openPicker(idx: number)    { currentIdx.value = idx; pickerVisible.value = true; }
 function closePicker()              { pickerVisible.value = false; currentIdx.value = null; }
 function selectUserSecret(n: string) {
@@ -334,6 +372,40 @@ onBeforeUnmount(() => {});
 .history-col { width: 45%; }
 .history {
   max-height: 200px; overflow-y: auto; list-style: none; padding: 0; margin-top: 8px;
+}
+
+/* 貼付入力 */
+.paste-input {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.paste-input input {
+  padding: 4px;
+  font-size: 16px;
+  width: calc(1ch * var(--digitCount) + 8px);
+}
+.paste-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  background-color: #10b981;
+  color: #fff;
+  cursor: pointer;
+}
+.paste-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 結果時の秘密表示 */
+.final-secrets {
+  margin: 16px 0;
+}
+.final-secrets p {
+  margin: 4px 0;
+  font-weight: bold;
 }
 
 /* ボタン */
