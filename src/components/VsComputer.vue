@@ -521,6 +521,11 @@ onBeforeUnmount(() => {});
   color: var(--bg-color);
   cursor: pointer;
 }
+.picker-btn:disabled {
+  background-color: #ccc;
+  color: #666;
+  cursor: not-allowed;
+}
 .delete-btn {
   background: #e53e3e;
 }
