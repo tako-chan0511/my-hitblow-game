@@ -201,8 +201,12 @@ const digitCount = computed(() => store.digitCount);
 
 // コンピュータ／履歴データ
 let computerSecret = "";
-const userHistory = ref<{ attempt: number; guess: string; hit: number; blow: number }[]>([]);
-const compHistory = ref<{ attempt: number; guess: string; hit: number; blow: number }[]>([]);
+const userHistory = ref<
+  { attempt: number; guess: string; hit: number; blow: number }[]
+>([]);
+const compHistory = ref<
+  { attempt: number; guess: string; hit: number; blow: number }[]
+>([]);
 const userAttempts = ref(0);
 const compAttempts = ref(0);
 const compCandidates = ref<string[]>([]);
@@ -275,15 +279,25 @@ function calcHB(guess: string, secret: string) {
   }
   return { hit, blow };
 }
-
+// 先頭で helper 関数を定義
+// 重複なしのランダム数字列生成ヘルパー
+function makeUniqueNumberString(length: number): string {
+  const pool = Array.from({ length: 10 }, (_, i) => i.toString());
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    const idx = Math.floor(Math.random() * pool.length);
+    result += pool.splice(idx, 1)[0];
+  }
+  return result;
+}
 // ゲーム開始
+// 既存の startGame を以下に置き換え
 function startGame() {
-  computerSecret = Array.from({ length: digitCount.value }, () => {
-    const nums = Array.from({ length: 10 }, (_, i) => i.toString());
-    return nums.splice(Math.floor(Math.random() * nums.length), 1)[0];
-  }).join("");
+  // 重複なしランダム数字列を生成
+  computerSecret = makeUniqueNumberString(digitCount.value);
+  // コンピュータ候補リスト初期化
   compCandidates.value = allCandidatesFast(digitCount.value);
-  stage.value = "playing";
+  stage.value = 'playing';
 }
 
 // ユーザーの手
@@ -308,7 +322,10 @@ function computerTurn() {
   compAttempts.value++;
   const { hit, blow } = calcHB(guess, userSecret.value.join(""));
   compHistory.value.push({ attempt: compAttempts.value, guess, hit, blow });
-  compCandidates.value = filterByHistory(compCandidates.value, compHistory.value);
+  compCandidates.value = filterByHistory(
+    compCandidates.value,
+    compHistory.value
+  );
   if (hit === digitCount.value) finishGame();
 }
 
@@ -329,7 +346,7 @@ function finishGame() {
     compAttempts: compAttempts.value,
     userSecret: userSecret.value.join(""),
     compSecret: computerSecret,
-    playedAt: new Date().toISOString()
+    playedAt: new Date().toISOString(),
   });
 
   stage.value = "finished";
