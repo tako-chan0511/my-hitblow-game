@@ -11,10 +11,11 @@
             v-for="(slot, idx) in filterSlots"
             :key="idx"
             class="slot-wrapper"
+            @click.stop="pickerIdx = pickerIdx === idx ? null : idx"
           >
             <button
               class="filter-slot"
-              @click="pickerIdx = pickerIdx === idx ? null : idx"
+              :disabled="false"
             >
               {{ slot === '' ? '―' : slot }}
             </button>
@@ -24,14 +25,14 @@
                 :key="num"
                 class="filter-picker-btn"
                 :disabled="filterSlots.includes(num)"
-                @click="selectFilter(num, idx)"
+                @click.stop="selectFilter(num, idx)"
               >
                 {{ num }}
               </button>
               <button
                 class="filter-picker-clear"
                 :disabled="filterSlots[idx] === ''"
-                @click="selectFilter('', idx)"
+                @click.stop="selectFilter('', idx)"
               >
                 削除
               </button>
@@ -71,19 +72,12 @@
 </template>
 
 <script setup lang="ts">
-import {
-  ref,
-  computed,
-  onMounted,
-  onBeforeUnmount,
-  defineEmits,
-} from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useGameStore } from '@/stores/game'
 
+declare const defineEmits: any
 // モーダルを閉じるための 'close' イベント
-const emit = defineEmits<{
-  (e: 'close'): void
-}>()
+const emit = defineEmits<{ (e: 'close'): void }>()
 
 // Pinia ストア
 const store = useGameStore()
@@ -186,16 +180,50 @@ function selectCandidate(num: string) {
   background: none; border: none; font-size: 18px;
   cursor: pointer; color: var(--text-color); margin-bottom: 12px;
 }
-.filter-slots { display: flex; gap: 8px; margin-bottom: 12px; justify-content: center; }
-.filter-slot { width: 40px; height: 40px; font-size: 20px; text-align: center; border: 1px solid #ccc; border-radius: 4px; background: var(--bg-color); color: var(--text-color); cursor: pointer; }
-.filter-picker-panel { position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%); background: var(--bg-color); padding: 8px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: grid; grid-template-columns: repeat(6, auto); gap: 6px; justify-content: center; z-index: 1001; }
-.filter-picker-btn { width: 40px; height: 40px; font-size: 20px; border: 1px solid #ccc; border-radius: 4px; background: var(--primary-color); color: var(--bg-color); cursor: pointer; }
-.filter-picker-btn:disabled { background-color: #ddd; color: #888; cursor: not-allowed; }
-.filter-picker-clear { min-width: 40px; height: 40px; padding: 0 8px; font-size: 18px; border: 1px solid #ccc; border-radius: 4px; background: red; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; white-space: nowrap; }
-.filter-picker-clear:disabled { background-color: #ddd; color: #888; cursor: not-allowed; }
+.filter-slots {
+  display: flex; gap: 8px; margin-bottom: 12px; justify-content: center;
+}
+.slot-wrapper {
+  position: relative;
+}
+.filter-slot {
+  width: 40px; height: 40px; font-size: 20px;
+  text-align: center; border: 1px solid #ccc; border-radius: 4px;
+  background: var(--bg-color); color: var(--text-color);
+  cursor: pointer;
+}
+.filter-picker-panel {
+  position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%);
+  background: var(--bg-color); padding: 8px; border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  display: grid; grid-template-columns: repeat(6, auto); gap: 6px;
+  justify-content: center; z-index: 1001;
+}
+.filter-picker-btn {
+  width: 40px; height: 40px; font-size: 20px;
+  border: 1px solid #ccc; border-radius: 4px;
+  background: var(--primary-color); color: var(--bg-color);
+  cursor: pointer;
+}
+.filter-picker-btn:disabled {
+  background-color: #ddd; color: #888; cursor: not-allowed;
+}
+.filter-picker-clear {
+  min-width: 40px; height: 40px; padding: 0 8px;
+  font-size: 18px; border: 1px solid #ccc; border-radius: 4px;
+  background: red; color: white; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; white-space: nowrap;
+}
+.filter-picker-clear:disabled {
+  background-color: #ddd; color: #888; cursor: not-allowed;
+}
 .limit-notice { font-size: 0.9em; color: #888; text-align: center; margin: 4px 0; }
 .list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; justify-content: center; }
-.list-item-button { display: inline-block; margin: 2px 4px; padding: 4px 8px; background-color: var(--primary-color); color: var(--bg-color); border: none; border-radius: 4px; font-family: monospace; cursor: pointer; }
+.list-item-button {
+  display: inline-block; margin: 2px 4px; padding: 4px 8px;
+  background-color: var(--primary-color); color: var(--bg-color);
+  border: none; border-radius: 4px; font-family: monospace; cursor: pointer;
+}
 .list-item-button:hover { opacity: 0.8; }
 .loading p { margin: 8px 0; font-size: 16px; color: var(--text-color); }
 </style>
