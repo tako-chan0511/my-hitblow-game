@@ -432,7 +432,7 @@ onBeforeUnmount(() => {});
 
 /* あなたの秘密表示 */
 .your-secret {
-  text-align: left;
+  text-align: center;
   margin-bottom: 12px;
   font-weight: bold;
 }
@@ -448,12 +448,18 @@ onBeforeUnmount(() => {});
   margin: 0 1.5%;
   text-align: left;
 }
+/* 履歴を囲むエリア */
 .history-area {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;      /* ← 履歴カラム全体を中央寄せ */
+  gap: 24px;                    /* ← 左右カラムの間隔 */
   margin-top: 20px;
 }
-
+/* 各履歴カラム内の見出しとリストを中央寄せ */
+.history-col {
+  text-align: center;
+  width: auto;                  /* ← 任意の幅で中央寄せ */
+}
 /* 貼付入力 */
 .paste-input {
   display: flex;
