@@ -27,3 +27,6 @@ npm run dev
 ```sh
 npm run build
 ```
+
+## 🎮 操作方法
+詳細は [操作手順はこちら](docs/INSTRUCTIONS.md) をご覧ください。
