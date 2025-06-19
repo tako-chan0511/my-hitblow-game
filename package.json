@@ -10,7 +10,7 @@
     "build:gh": "cross-env DEPLOY_TARGET=GH_PAGES vite build",
     "type-check": "vue-tsc --noEmit",
     "preview": "vite preview",
-    "predeploy": "npm run build:gh",   
+    "predeploy": "npm run build:gh",
     "deploy": "gh-pages -d dist"
   },
   "dependencies": {
@@ -30,6 +30,7 @@
     "gh-pages": "^6.3.0",
     "typescript": "^5.8.3",
     "vite": "^6.2.1",
+    "vite-plugin-pwa": "^1.0.0",
     "vite-plugin-vue-devtools": "^7.7.2",
     "vue-tsc": "^2.2.10"
   }
