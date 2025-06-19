@@ -17,9 +17,9 @@ export default defineConfig({
         enabled: true // 開発モードでもPWAの動作確認を可能にする
       },
       manifest: {
-        name: '数独 (Sudoku)', // アプリのフルネーム
-        short_name: '数独', // ホーム画面に表示される短い名前
-        description: 'クラシックな数独パズルゲームです。', // アプリの説明
+        name: 'Hit&Blow', // アプリのフルネーム
+        short_name: 'Hit&Blow', // ホーム画面に表示される短い名前
+        description: '桁数選択Hit＆Blowゲームです。', // アプリの説明
         start_url: '.', // アプリ起動時のURL
         display: 'standalone', // アドレスバーなどを表示しないネイティブアプリのような表示
         background_color: '#ffffff', // スプラッシュ画面の背景色
