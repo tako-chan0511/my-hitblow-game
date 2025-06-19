@@ -9,10 +9,10 @@
 
     <div class="mode-select">
       <button :class="{ active: mode === 'practice' }" @click="mode = 'practice'">
-        練習
+        練習モード
       </button>
       <button :class="{ active: mode === 'versus' }" @click="mode = 'versus'">
-        対PC
+        PC対戦モード
       </button>
     </div>
 
