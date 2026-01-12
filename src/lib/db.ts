@@ -7,7 +7,7 @@ let db: Database;
 export async function getDb(): Promise<Database> {
   if (db) return db;
   const SQL = await initSqlJs({
-     locateFile: file =>
+     locateFile: (file: string)  =>
       // 開発・本番問わずルート直下の sql-wasm.wasm を参照
       `${window.location.origin}${import.meta.env.BASE_URL}${file}`
   });
@@ -42,7 +42,8 @@ export function persistDb() {
 export async function addResult(
   digitCount: number,
   attempts: number,
-  elapsedMs: number
+  elapsedMs: number,
+  playedAtJp?: string
 ) {
   const database = await getDb();
   const stmt = database.prepare(
